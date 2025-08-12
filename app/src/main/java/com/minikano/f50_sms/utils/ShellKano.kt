@@ -1,5 +1,6 @@
 package com.minikano.f50_sms.utils
 
+import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
 import com.minikano.f50_sms.modules.TAG
@@ -659,6 +660,14 @@ class ShellKano {
                 )
                 ensureAdbAlive(context)
             }.start()
+        }
+        fun getShellUser(): String {
+            return try {
+                val process = Runtime.getRuntime().exec("whoami")
+                process.inputStream.bufferedReader().use { it.readLine() } ?: "unknown"
+            } catch (e: Exception) {
+                "error"
+            }
         }
     }
 }

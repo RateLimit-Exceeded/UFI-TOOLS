@@ -18,12 +18,14 @@ import com.minikano.f50_sms.utils.KanoReport.Companion.reportToServer
 import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.ShellKano.Companion.executeShellFromAssetsSubfolderWithArgs
+import com.minikano.f50_sms.utils.ShellKano.Companion.getShellUser
 import com.minikano.f50_sms.utils.SmbThrottledRunner
 import com.minikano.f50_sms.utils.SmsPoll
 import com.minikano.f50_sms.utils.TaskSchedulerManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
@@ -52,6 +54,7 @@ class ADBService : Service() {
             // 等文件拷贝完成后再继续
             startAdbKeepAliveTask(applicationContext)
             startIperfTask(applicationContext)
+            startCrondTask(applicationContext)
             val executor = Executors.newFixedThreadPool(2)
             executor.execute(runnableSMS)
             executor.execute(runnableSMB)
@@ -79,6 +82,34 @@ class ADBService : Service() {
                 file.delete()
             }
         }
+
+
+        //初始化crontab文件夹（如果没有）
+        val newDir = File(context.filesDir,"crontab")
+        if(!newDir.exists()) newDir.mkdirs()
+        val newDir1 = File(context.filesDir,"crontab/cron.d")
+        val newDir2 = File(context.filesDir,"crontab/users")
+        val newDir3 = File(context.filesDir,"crontab/cronstamps")
+        if(!newDir1.exists()) newDir1.mkdirs()
+        if(!newDir2.exists()) newDir2.mkdirs()
+        if(!newDir3.exists()) newDir3.mkdirs()
+
+        val username = getShellUser()
+        val userFile = File(newDir2, username)
+
+        if (!userFile.exists()) {
+            val created = userFile.createNewFile()
+            if (created) {
+                Log.d("kano_ZTE_LOG","成功创建用户文件: ${userFile.absolutePath}")
+            } else {
+                Log.d("kano_ZTE_LOG","创建用户文件失败: ${userFile.absolutePath}")
+            }
+        } else {
+            Log.d("kano_ZTE_LOG","用户文件已存在: ${userFile.absolutePath}")
+        }
+
+        val crontabScriptsDir = File(context.filesDir,"crontab_scripts")
+        if(!crontabScriptsDir.exists()) crontabScriptsDir.mkdirs()
 
         // 复制 assets 中的所有文件
         try {
@@ -133,6 +164,31 @@ class ADBService : Service() {
                 KanoLog.e("kano_ZTE_LOG", "iperf3启动失败")
             }}catch (e:Exception){
                 KanoLog.e("kano_ZTE_LOG", "iperf3命令执行出错",e)
+            }
+        }
+    }
+
+    private fun startCrondTask(context: Context){
+        iperfExecutor.execute {
+            try{
+                KanoLog.d("kano_ZTE_LOG", "crond启动中...")
+
+                //启动crond
+                var result =
+                    executeShellFromAssetsSubfolderWithArgs(
+                        applicationContext,
+                        "shell/kano_crond",
+                        "-L",
+                        "${context.cacheDir.absolutePath}/kano_cron.log",
+//                        "-l",
+//                        "8"
+                    )
+                if (result != null) {
+                    KanoLog.d("kano_ZTE_LOG", "crond已启动${result}")
+                } else {
+                    KanoLog.e("kano_ZTE_LOG", "crond启动失败")
+                }}catch (e:Exception){
+                KanoLog.e("kano_ZTE_LOG", "crond命令执行出错",e)
             }
         }
     }
