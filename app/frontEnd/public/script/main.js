@@ -2347,17 +2347,14 @@ function main_func() {
 
     let initClientManagementModal = async () => {
         try {
-            const { station_list, lan_station_list, BlackMacList, BlackNameList, AclMode } = await getData(new URLSearchParams({
-                cmd: 'station_list,lan_station_list,queryDeviceAccessControlList'
+            const { station_list, lan_station_list } = await getData(new URLSearchParams({
+                cmd: 'station_list,lan_station_list'
             }))
-            const blackMacList = BlackMacList ? BlackMacList.split(';') : []
-            const blackNameList = BlackNameList ? BlackNameList.split(';') : []
 
             const CONN_CLIENT_LIST = document.querySelector('#CONN_CLIENT_LIST')
             const BLACK_CLIENT_LIST = document.querySelector('#BLACK_CLIENT_LIST')
 
             let conn_client_html = ''
-            let black_list_html = ''
 
             if (station_list && station_list.length) {
                 conn_client_html += station_list.map(({ hostname, ip_addr, mac_addr }) => (`
@@ -2367,12 +2364,6 @@ function main_func() {
                     <p><span>${t('client_mgmt_mac')}：</span><span onclick="copyText(event)">${mac_addr}</span></p>
                     <p><span>${t('client_mgmt_ip')}：</span><span onclick="copyText(event)">${ip_addr}</span></p>
                     <p><span>${t('client_mgmt_conn_type')}：</span><span>${t('client_mgmt_conn_wireless')}</span></p>
-                </div>
-                <div style="flex:1;text-align: right;">
-                    <button class="btn" style="padding: 20px 4px;" 
-                        onclick="setOrRemoveDeviceFromBlackList('${[mac_addr, ...blackMacList].join(';')}','${[hostname, ...blackNameList].join(';')}','${AclMode}')">
-                        🚫 ${t('client_mgmt_block')}
-                    </button>
                 </div>
             </div>`)).join('')
             }
@@ -2386,78 +2377,16 @@ function main_func() {
                     <p><span>${t('client_mgmt_ip')}：</span><span onclick="copyText(event)">${ip_addr}</span></p>
                     <p><span>${t('client_mgmt_conn_type')}：</span><span>${t('client_mgmt_conn_wired')}</span></p>
                 </div>
-                <div style="flex:1;text-align: right;">
-                    <button class="btn" style="padding: 20px 4px;" 
-                        onclick="setOrRemoveDeviceFromBlackList('${[mac_addr, ...blackMacList].join(';')}','${[hostname, ...blackNameList].join(';')}','${AclMode}')">
-                        🚫 ${t('client_mgmt_block')}
-                    </button>
-                </div>
             </div>`)).join('')
             }
 
-            if (blackMacList.length && blackNameList.length) {
-                black_list_html += blackMacList.map((item, index) => {
-                    if (item) {
-                        let params = `'${blackMacList.filter(i => item != i).join(';')}',` +
-                            `'${blackMacList.filter(i => blackNameList[index] != i).join(';')}',` +
-                            `'${AclMode}'`
-                        return `
-                    <div class="card-item" style="display: flex;width: 100%;margin: 10px 0;overflow: auto;">
-                        <div style="margin-right: 10px;">
-                            <p><span>${t('client_mgmt_hostname')}：</span><span onclick="copyText(event)">${blackNameList[index] ? blackNameList[index] : t('client_mgmt_unknown')}</span></p>
-                            <p><span>${t('client_mgmt_mac')}：</span><span onclick="copyText(event)">${item}</span></p>
-                        </div>
-                        <div style="flex:1;text-align: right;">
-                            <button class="btn" style="padding: 20px 4px;" onclick="setOrRemoveDeviceFromBlackList(${params})">
-                                ✅ ${t('client_mgmt_unblock')}
-                            </button>
-                        </div>
-                    </div>`
-                    }
-                }).join('')
-            }
-
             if (conn_client_html == '') conn_client_html = `<p>${t('client_mgmt_no_device')}</p>`
-            if (black_list_html == '') black_list_html = `<p>${t('client_mgmt_no_device')}</p>`
 
             CONN_CLIENT_LIST && (CONN_CLIENT_LIST.innerHTML = conn_client_html)
-            BLACK_CLIENT_LIST && (BLACK_CLIENT_LIST.innerHTML = black_list_html)
+            BLACK_CLIENT_LIST && (BLACK_CLIENT_LIST.innerHTML = `<p>${t('client_mgmt_blacklist_disabled')}</p>`)
         } catch (e) {
             console.error(e)
             createToast(t('client_mgmt_fetch_error'), 'red')
-        }
-    }
-
-    let setOrRemoveDeviceFromBlackList = async (BlackMacList, BlackNameList, AclMode) => {
-        try {
-            const cookie = await login()
-            if (!cookie) {
-                createToast(t('toast_login_failed_check_network'), 'red')
-                closeModal('#ClientManagementModal')
-                setTimeout(() => {
-                    out()
-                }, 310);
-                return null
-            }
-            const res = await postData(cookie, {
-                goformId: "setDeviceAccessControlList",
-                AclMode: AclMode.trim(),
-                WhiteMacList: "",
-                BlackMacList: BlackMacList.trim(),
-                WhiteNameList: "",
-                BlackNameList: BlackNameList.trim()
-            })
-            const { result } = await res.json()
-            if (result && result == 'success') {
-                createToast(t('toast_oprate_success'), 'green')
-            } else {
-                createToast(t('toast_oprate_failed'), 'red')
-            }
-            await initClientManagementModal()
-        }
-        catch (e) {
-            console.error(e);
-            createToast(t('toast_request_data_failed'), 'red')
         }
     }
 
@@ -3586,264 +3515,23 @@ function main_func() {
     })
 
     //软件更新
-    const queryUpdate = async () => {
-        if (!(await initRequestData())) {
-            return null
-        }
-        try {
-            const res = await fetch(`${KANO_baseURL}/check_update`, {
-                method: 'get',
-                headers: common_headers
-            })
-            const { alist_res, base_uri, changelog } = await res.json()
-            const contents = alist_res?.data?.content
-            if (!contents || contents.length <= 0) return null
-            //寻找最新APK
-            const content = (contents.filter(item => item.name.includes('.apk')).sort((a, b) => {
-                return new Date(b.modified) - new Date(a.modified)
-            }))[0]
-            if (content) {
-                return {
-                    name: content.name,
-                    base_uri,
-                    changelog
-                }
-            }
-        } catch {
-            return null
-        }
-    }
-
-    //安装更新
-    const requestInstallUpdate = async () => {
-        // const changelogTextContent = document.querySelector('#ChangelogTextContent')
-        // changelogTextContent.innerHTML = ''
-        const OTATextContent = document.querySelector('#OTATextContent')
-        try {
-            OTATextContent.innerHTML = `<div>📦 ${t('install_ing')}</div>`
-            const _res = await fetch(`${KANO_baseURL}/install_apk`, {
-                method: 'POST',
-                headers: {
-                    ...common_headers,
-                }
-            })
-            const res = await _res.json()
-            if (res && res.error) throw new Error(t('install_failed') + ': ' + res.error)
-            const res_text = res.result == 'success' ? '✅ ' + t('install_success_refresh') : '❌ ' + t('install_fail_reboot')
-            OTATextContent.innerHTML = `<div>${res_text}</div><div>${res.result != 'success' ? res.result : ''}</div>`
-        } catch (e) {
-            createToast(t('install_done'), 'green')
-            let res_text = '✅ ' + t('install_success_refresh')
-            console.log(e.message);
-            if (e.message.includes(t('install_failed'))) {
-                res_text = `❌ ${t('install_failed')}，${t('reason')}${e.message.replace(t('install_failed'), '')}，${t('error_please_reboot_devices')}`
-            }
-            OTATextContent.innerHTML = `<div>${res_text}</div></div>`
-        } finally {
-            initUpdateSoftware()
-        }
-    }
-
-    //立即更新
-    let updateSoftwareInterval = null
-    const handleUpdateSoftware = async (url) => {
-        updateSoftwareInterval && updateSoftwareInterval()
-        if (!url || url.trim() == "") return
-        const doUpdateEl = document.querySelector('#doUpdate')
-        const closeUpdateBtnEl = document.querySelector('#closeUpdateBtn')
-        const updateSoftwareModal = document.querySelector('#updateSoftwareModal')
-
-        doUpdateEl.innerHTML = t('one_click_update')
-
-        // 是否启用高级功能
-        const isEnabledAdvanceFunc = await checkAdvanceFunc()
-
-        if (!isEnabledAdvanceFunc) {
-            let adb_status = await adbKeepAlive()
-            if (!adb_status) {
-                return createToast(t('adb_not_init'), 'red')
-            }
-        } else {
-            createToast(t('advanced_install'))
-            doUpdateEl.innerHTML = t('fast_installing')
-        }
-
-        // 更新时禁用按钮
-        doUpdateEl && (doUpdateEl.onclick = null)
-        doUpdateEl && (doUpdateEl.style.backgroundColor = 'var(--dark-btn-disabled-color)')
-        closeUpdateBtnEl && (closeUpdateBtnEl.onclick = null)
-        closeUpdateBtnEl && (closeUpdateBtnEl.style.backgroundColor = 'var(--dark-btn-disabled-color)')
-        updateSoftwareModal && (updateSoftwareModal.onclick = null)
-        try {
-            // const changelogTextContent = document.querySelector('#ChangelogTextContent')
-            // changelogTextContent.innerHTML = ''
-            //开始请求下载更新
-            await fetch(`${KANO_baseURL}/download_apk`, {
-                method: 'POST',
-                headers: {
-                    ...common_headers,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(
-                    {
-                        apk_url: url
-                    }
-                )
-            })
-        } catch {
-            createToast(t('download_request_failed'), 'red')
-            initUpdateSoftware()
-            return
-        }
-
-        //开启定时器，查询更新进度
-        const OTATextContent = document.querySelector('#OTATextContent')
-        updateSoftwareInterval = requestInterval(async () => {
-            try {
-                const _res = await fetch(`${KANO_baseURL}/download_apk_status`, {
-                    method: 'get',
-                    headers: common_headers
-                })
-                const res = await _res.json()
-                if (res && res.error == 'error') throw t('download_failed')
-                const status = res.status == "idle" ? `🕒 ${t("download_waiting")}` : res.status == "downloading" ? `🟢 ${t('download_ing')}` : res.status == "done" ? `✅ ${t('download_success')}` : `❌ ${t('download_failed')}`
-                OTATextContent.innerHTML = `<div>🔄 ${t('donwload_ing_ota')}...<br/>${t('download_status')}：${status}<br/>📁 ${t('download_progress')}：${res?.percent}%<br/></div>`
-                if (res.percent == 100) {
-                    updateSoftwareInterval && updateSoftwareInterval()
-                    createToast(t('toast_download_success_install'), 'green')
-                    // 执行安装
-                    requestInstallUpdate()
-                }
-            } catch (e) {
-                OTATextContent.innerHTML = t('toast_download_failed_network')
-                updateSoftwareInterval && updateSoftwareInterval()
-                initUpdateSoftware()
-            }
-        }, 500)
-    }
-
-    //仅下载更新包到本地
-    const handleDownloadSoftwareLink = async (fileLink) => {
-        createToast(t('toast_download_start'), 'green')
-        const linkEl = document.createElement('a')
-        linkEl.href = fileLink
-        linkEl.target = '_blank'
-        linkEl.style.display = 'none'
-        document.body.appendChild(linkEl)
-        setTimeout(() => {
-            linkEl.click()
-            setTimeout(() => {
-                linkEl.remove()
-            }, 100);
-        }, 50);
-    }
-
-    //检测更新
-    const checkUpdateAction = async (silent = false) => {
+    const disableOtaSection = () => {
         const changelogTextContent = document.querySelector('#ChangelogTextContent')
         const OTATextContent = document.querySelector('#OTATextContent')
-        OTATextContent.innerHTML = t('checking_update')
-        changelogTextContent.innerHTML = ''
-        !silent && showModal('#updateSoftwareModal')
-
-        try {
-            const content = await queryUpdate()
-            if (content) {
-                const { app_ver, app_ver_code } = await (await fetch(`${KANO_baseURL}/version_info`, { headers: common_headers })).json();
-                const { name, base_uri, changelog } = content;
-
-                const version = name.match(/V(\d+\.\d+\.\d+)/i)?.[1];
-                const appVer = app_ver.match(/(\d+\.\d+\.\d+)/i)?.[1];
-                const { date_str, formatted_date } = getApkDate(name);
-                let isLatest = false;
-
-                if (version && appVer) {
-                    const versionNew = version.trim();
-                    const versionCurrent = appVer.trim();
-
-                    // 如果新版本号大于当前版本
-                    if (versionNew > versionCurrent) {
-                        isLatest = false;
-                    }
-                    // 如果版本号相同，再比时间
-                    else if ((versionNew === versionCurrent) && formatted_date) {
-                        const newDate = Number(formatted_date);
-                        const currentDate = Number(app_ver_code);
-
-                        if (newDate > currentDate) {
-                            isLatest = false;
-                        } else {
-                            isLatest = true;
-                        }
-                    }
-                }
-
-                // 如果包含 force 标志，强制不是最新
-                if (name.includes('force')) {
-                    isLatest = false;
-                }
-
-                if (!silent) {
-                    const doUpdateEl = document.querySelector('#doUpdate')
-                    const doDownloadAPKEl = document.querySelector('#downloadAPK')
-                    if (doUpdateEl && doDownloadAPKEl) {
-                        if (!isLatest) {
-                            doUpdateEl.style.backgroundColor = 'var(--dark-btn-color)'
-                            doDownloadAPKEl.style.backgroundColor = 'var(--dark-btn-color)'
-                            doUpdateEl.onclick = () => handleUpdateSoftware(base_uri + name)
-                            doDownloadAPKEl.onclick = () => handleDownloadSoftwareLink(base_uri + name)
-                        } else {
-                            doUpdateEl.onclick = null
-                            doDownloadAPKEl.onclick = null
-                            doUpdateEl.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-                            doDownloadAPKEl.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-                        }
-                    }
-                    //获取changeLog
-                    // if (!isLatest) {
-                    changelogTextContent.innerHTML = changelog
-                    // }
-                    OTATextContent.innerHTML = `${isLatest ? `<div>${t('is_latest_version')}：V${app_ver} ${app_ver_code}</div>` : `<div>${t('found_update')}:${name}<br/>${date_str ? `${t('release_date')}：${date_str}` : ''}</div>`}`
-
-                }
-                return !isLatest ? {
-                    isForceUpdate: name.includes('force'),
-                    text: version + ' ' + date_str
-                } : null
-
-            } else {
-                throw new Error(t('error'))
-            }
-        } catch (e) {
-            !silent && (OTATextContent.innerHTML = `${t('connect_update_server_failed')}<br>${e.message ? e.message : ''}`)
-            return null
-        }
+        changelogTextContent && (changelogTextContent.innerHTML = '')
+        OTATextContent && (OTATextContent.innerHTML = t('ota_feature_disabled'))
     }
 
     const initUpdateSoftware = async () => {
-        const changelogTextContent = document.querySelector('#ChangelogTextContent')
-        changelogTextContent.innerHTML = ''
+        disableOtaSection()
         const btn = document.querySelector('#OTA')
         if (!btn) return
         const closeUpdateBtnEl = document.querySelector('#closeUpdateBtn')
         closeUpdateBtnEl && (closeUpdateBtnEl.onclick = () => closeModal('#updateSoftwareModal'))
         closeUpdateBtnEl && (closeUpdateBtnEl.style.backgroundColor = 'var(--dark-btn-color)')
 
-        if (!(await initRequestData())) {
-            btn.onclick = () => createToast(t('toast_please_login'), 'red')
-            btn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-            return null
-        }
-        btn.style.backgroundColor = 'var(--dark-btn-color)'
-        btn.onclick = async () => {
-            const btn = document.querySelector('#OTA')
-            if (!(await initRequestData())) {
-                btn.onclick = () => createToast(t('toast_please_login'), 'red')
-                btn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-                return null
-            }
-            checkUpdateAction()
-        }
+        btn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+        btn.onclick = () => createToast(t('ota_feature_disabled'), 'red')
     }
     initUpdateSoftware()
 
@@ -3900,16 +3588,6 @@ function main_func() {
         }
 
     }
-
-    //开屏后检测更新
-    setTimeout(() => {
-        checkUpdateAction(true).then((res) => {
-            if (res) {
-                createToast(`${t('found')} ${res.isForceUpdate ? t('sticky_update') : t('mew_update')}：${res.text}`)
-            }
-        })
-    }, 100);
-
 
     //初始化短信转发表单
     const initSmsForward = async (needSwitch = true, method = undefined) => {
@@ -5741,63 +5419,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     initTerms()
 
 
-    // 获取消息
-    const initMessage = async () => {
-        if (!(await initRequestData())) {
-            return null
-        }
-        try {
-            const api = 'https://api.kanokano.cn/ufi_tools_report'
-            const { device_id: uuid } = await (await fetch(`${KANO_baseURL}/device_id`, {
-                headers: common_headers
-            })).json()
-            if (uuid) {
-                const { message, has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/get_message/${uuid}`, {
-                    headers: common_headers
-                })).json()
-                if (has_read_message == true || has_read_message == "true") return
-                const { text } = parseDOM(message) //过滤掉远程任何的script脚本，防止远程任意代码自动执行
-                const { el, close } = createFixedToast('kano_message', `
-                    <div style="pointer-events:all;width:80vw;max-width:300px">
-                        <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
-                        <div style="margin:10px 0" id="kano_message_inner">${text}</div>
-                        <div style="text-align:right">
-                            <button style="font-size:.64rem" id="close_message_btn" data-i18n="pay_btn_dismiss">${t('pay_btn_dismiss')}</button>
-                        </div>
-                    </div>
-                    `)
-                const btn = el.querySelector('#close_message_btn')
-                if (!btn) {
-                    close()
-                    return
-                }
-                btn.onclick = async () => {
-                    try {
-                        const { has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/set_read_message/${uuid}`, {
-                            method: 'post',
-                            headers: common_headers
-                        })).json()
-                        if (has_read_message) {
-                            close()
-                        }
-                    } catch {
-                        try {
-                            const { has_read_message } = await (await fetch(`${api}/set_read_message/${uuid}`, {
-                                method: 'post'
-                            })).json()
-                            if (has_read_message) {
-                                close()
-                            }
-                        } catch { }
-                    } finally {
-                        close()
-                    }
-                }
-            }
-        } catch { }
-    }
-    initMessage()
-
     const togglePort = async (port, flag, isBootup = false, v6 = false) => {
         try {
             if (!await checkAdvanceFunc()) {
@@ -6480,8 +6101,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         handleSmsForwardForm,
         handleSmsForwardDingTalkForm,
         handleShell,
-        handleDownloadSoftwareLink,
-        handleUpdateSoftware,
         enableTTYD,
         changeNetwork,
         changeUSBNetwork,
@@ -6515,7 +6134,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         handleQosAT,
         handleSambaPath,
         handleAT,
-        setOrRemoveDeviceFromBlackList,
         onSelectCellRow,
         handleClosePayModal,
         toggleCellInfoRefresh
