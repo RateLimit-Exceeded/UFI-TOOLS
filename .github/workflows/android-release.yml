@@ -2,37 +2,81 @@ name: Android Release CI
 
 on:
   push:
-    branches: [ "1006" ]
+    branches: ["1006"]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "20"
+  JAVA_VERSION: "17"
 
 jobs:
-  upload-release:
+  build-and-release:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Find APK
-        id: find_apk
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: app/frontEnd/package-lock.json
+
+      - name: Install front-end dependencies
+        working-directory: app/frontEnd
+        run: npm ci
+
+      - name: Build front-end assets
+        working-directory: app/frontEnd
+        run: npm run build
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Assemble release APK
+        run: ./gradlew clean assembleRelease
+
+      - name: Prepare release artifact
+        id: prepare_apk
         run: |
-          APK_FILE=$(find app/release -name "ZTE-UFI-TOOLS*.apk" | head -n 1)
-          if [ -z "$APK_FILE" ]; then
-            echo "APK file not found!"
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "Release APK not found at $APK_PATH" >&2
             exit 1
           fi
-          echo "APK_PATH=$APK_FILE" >> $GITHUB_ENV
-          echo "apk_path=$APK_FILE" >> $GITHUB_OUTPUT
+          METADATA="app/build/outputs/apk/release/output-metadata.json"
+          if [ -f "$METADATA" ]; then
+            VERSION_NAME=$(jq -r '.elements[0].versionName' "$METADATA")
+          fi
+          VERSION_NAME=${VERSION_NAME:-unknown}
+          SHORT_SHA=${GITHUB_SHA::7}
+          OUTPUT_DIR="app/build/outputs/apk/release"
+          TARGET_NAME="ZTE-UFI-TOOLS_v${VERSION_NAME}_${SHORT_SHA}.apk"
+          TARGET_PATH="$OUTPUT_DIR/$TARGET_NAME"
+          cp "$APK_PATH" "$TARGET_PATH"
+          echo "apk_path=$TARGET_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Generate timestamp tag
         id: tag
         run: |
           TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
-          echo "Generated tag: $TAG_NAME"
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag_name }}
-          files: ${{ steps.find_apk.outputs.apk_path }}
+          files: ${{ steps.prepare_apk.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
