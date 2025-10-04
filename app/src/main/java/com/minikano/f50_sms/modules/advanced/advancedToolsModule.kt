@@ -46,6 +46,7 @@ fun Route.advancedToolsModule(context: Context, targetServerIP: String) {
                 ?: throw Exception("复制 adb 到 filesDir 失败")
             val smbPath = SMBConfig.writeConfig(context)
                 ?: throw Exception("复制 smb.conf 到 filesDir 失败")
+            KanoLog.d(TAG, "smb.conf 生成路径: $smbPath")
             val outFileTtyd = KanoUtils.copyFileToFilesDir(context, "shell/ttyd")
                 ?: throw Exception("复制 ttyd 到 filesDir 失败")
             val outFileSocat = KanoUtils.copyFileToFilesDir(context, "shell/socat")
@@ -59,6 +60,7 @@ fun Route.advancedToolsModule(context: Context, targetServerIP: String) {
             outFileTtyd.setExecutable(true)
             outFileSocat.setExecutable(true)
             outFileSmbSh.setExecutable(true)
+            KanoLog.d(TAG, "核心二进制复制完成: adb=${outFileAdb.exists()} ttyd=${outFileTtyd.exists()} socat=${outFileSocat.exists()} samba_exec=${outFileSmbSh.exists()}")
 
             var jsonResult = """{"result":"执行成功<br>Execution successful！"}"""
 
@@ -68,11 +70,14 @@ fun Route.advancedToolsModule(context: Context, targetServerIP: String) {
                 val cmdAdb =
                     "${outFileAdb.absolutePath} -s localhost shell cat $smbPath > /data/samba/etc/smb.conf"
 
+                KanoLog.d(TAG, "准备通过 shell 写入 smb.conf: $cmdShell")
                 val resultShell = sendShellCmd(cmdShell,3)
+                KanoLog.d(TAG, "shell 写入结果: done=${resultShell.done} content=${resultShell.content}")
                 var resultAdb:String? = null
 
                 if(adbIsReady) {
                     resultAdb = ShellKano.runShellCommand(cmdAdb, context = context)
+                    KanoLog.d(TAG, "adb 写入结果: $resultAdb")
                 }
 
                 KanoLog.d(TAG, "使用shell开启高级模式结果 是否成功：${resultShell.done} 内容：${resultShell.content}")
@@ -115,6 +120,7 @@ fun Route.advancedToolsModule(context: Context, targetServerIP: String) {
                     throw Exception("执行命令失败，没有找到 socat 创建的 sock (高级功能是否开启？)<br>Command execution failed, could not find the sock created by socat (are advanced features enabled?)")
                 }
 
+                KanoLog.d(TAG, "准备通过 root shell 执行清理脚本: ${script.replace("\n", "; ")}")
                 val result = RootShell.sendCommandToSocket(script, socketPath.absolutePath)
                     ?: throw Exception("删除 smb.conf 失败")
                 KanoLog.d(TAG, "sendCommandToSocket Output:\n$result")
@@ -126,7 +132,7 @@ fun Route.advancedToolsModule(context: Context, targetServerIP: String) {
             call.respondText(jsonResult, ContentType.Application.Json)
 
         } catch (e: Exception) {
-            KanoLog.d(TAG, "smbPath 执行出错：${e.message}")
+            KanoLog.e(TAG, "smbPath 执行出错", e)
             call.respondText(
                 """{"error":"Error：${e.message}"}""",
                 ContentType.Application.Json,
