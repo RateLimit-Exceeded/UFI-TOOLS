@@ -1,0 +1,37 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "APK",
+    "kind": "Directory"
+  },
+  "applicationId": "com.minikano.f50_sms",
+  "variantName": "release",
+  "elements": [
+    {
+      "type": "SINGLE",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 20251005,
+      "versionName": "3.7.2",
+      "outputFile": "ZTE-UFI-TOOLS_WEB_V3.7.2_20251005_1714.apk"
+    }
+  ],
+  "elementType": "File",
+  "baselineProfiles": [
+    {
+      "minApi": 28,
+      "maxApi": 30,
+      "baselineProfiles": [
+        "baselineProfiles/1/ZTE-UFI-TOOLS_WEB_V3.7.2_20251005_1714.dm"
+      ]
+    },
+    {
+      "minApi": 31,
+      "maxApi": 2147483647,
+      "baselineProfiles": [
+        "baselineProfiles/0/ZTE-UFI-TOOLS_WEB_V3.7.2_20251005_1714.dm"
+      ]
+    }
+  ],
+  "minSdkVersionForDexing": 26
+}
