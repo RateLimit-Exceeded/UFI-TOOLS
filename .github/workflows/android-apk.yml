@@ -3,12 +3,12 @@ name: Build Android APK on Push
 on:
   push:
     branches:
-      - '1007'
+      - '**'
 
 jobs:
   build:
-    environment: ANDROID_KEYSTORE_BASE64
     runs-on: ubuntu-latest
+    environment: ANDROID_KEYSTORE_BASE64
     env:
       GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx2g
     steps:
@@ -25,21 +25,21 @@ jobs:
           cache: gradle
 
       - name: Prepare signing configuration
+        shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-        shell: bash
         run: |
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
-            cat <<EOF >> local.properties
-MYAPP_RELEASE_STORE_FILE=release.keystore
-MYAPP_RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS
-MYAPP_RELEASE_STORE_PASSWORD=$ANDROID_STORE_PASSWORD
-MYAPP_RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD
-EOF
+            {
+              echo "MYAPP_RELEASE_STORE_FILE=release.keystore"
+              echo "MYAPP_RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+              echo "MYAPP_RELEASE_STORE_PASSWORD=$ANDROID_STORE_PASSWORD"
+              echo "MYAPP_RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+            } >> local.properties
             echo "SIGNING_PRESENT=true" >> "$GITHUB_ENV"
           else
             echo "SIGNING_PRESENT=false" >> "$GITHUB_ENV"
