@@ -81,7 +81,7 @@ android {
         targetSdk = 33
         // 动态生成 versionCode 为 yyyyMMdd 格式
         versionCode = SimpleDateFormat("yyyyMMdd").format(Date()).toInt()
-        versionName = "3.7.2-beta"
+        versionName = "3.7.7-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
