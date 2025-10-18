@@ -1,9 +1,9 @@
 package com.minikano.f50_sms.modules.plugins
 
 import android.content.Context
-import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.modules.BASE_TAG
 import com.minikano.f50_sms.modules.auth.authenticatedRoute
+import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.utils.KanoRequest
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -15,6 +15,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import java.util.Locale
 
 fun Route.pluginsModule(context: Context) {
     val TAG = "[$BASE_TAG]_pluginsModule"
@@ -22,25 +26,216 @@ fun Route.pluginsModule(context: Context) {
     val pluginSourcePrefName = "kano_ZTE_store"
     val pluginSourcePrefKey = "kano_plugin_sources"
 
+    fun normalizePath(raw: String): String {
+        if (raw.isBlank()) {
+            return raw
+        }
+        val trimmed = raw.trim()
+        val withLeadingSlash = if (trimmed.startsWith("/")) trimmed else "/$trimmed"
+        return if (withLeadingSlash == "/") "/" else withLeadingSlash.trimEnd('/')
+    }
+
+    val slugSplitRegex = Regex("[^A-Za-z0-9]+")
+
+    fun slugify(vararg parts: String): String? {
+        val sanitizedParts = parts.flatMap { part ->
+            part.split(slugSplitRegex)
+                .map { it.trim().lowercase(Locale.ROOT) }
+                .filter { it.isNotBlank() }
+        }
+        if (sanitizedParts.isEmpty()) {
+            return null
+        }
+        return sanitizedParts.joinToString("-")
+    }
+
+    fun slugFromUrl(url: String): String? {
+        return try {
+            val parsed = URI(url)
+            val hostPart = parsed.host ?: ""
+            val pathPart = parsed.path ?: ""
+            slugify(hostPart, pathPart)
+        } catch (e: Exception) {
+            slugify(url)
+        }
+    }
+
+    data class AlistDerivedConfig(
+        val apiUrl: String,
+        val path: String,
+        val downloadUrl: String,
+        val idHint: String?,
+        val nameHint: String?,
+        val passwordHint: String?
+    )
+
+    fun deriveAlistConfigFromDownload(downloadUrl: String): AlistDerivedConfig? {
+        return try {
+            val normalized = downloadUrl.trim().trimEnd('/')
+            if (normalized.isEmpty()) {
+                return null
+            }
+            val uri = URI(normalized)
+            val scheme = uri.scheme
+            val host = uri.host
+            if (scheme.isNullOrBlank() || host.isNullOrBlank()) {
+                return null
+            }
+
+            val portPart = if (uri.port != -1) ":${uri.port}" else ""
+            val origin = "$scheme://$host$portPart"
+            val pathSegments = uri.path?.split('/')?.filter { it.isNotBlank() } ?: emptyList()
+            var prefixSegments: List<String> = emptyList()
+            var alistPathSegments: List<String> = emptyList()
+            val dIndex = pathSegments.indexOf("d")
+            if (dIndex != -1 && dIndex < pathSegments.lastIndex) {
+                prefixSegments = pathSegments.subList(0, dIndex)
+                alistPathSegments = pathSegments.subList(dIndex + 1, pathSegments.size)
+            } else {
+                val prefixes = setOf("fs", "dav", "alist", "share", "public", "downloads")
+                val pIndex = pathSegments.indexOfFirst { prefixes.contains(it.lowercase(Locale.ROOT)) }
+                if (pIndex != -1 && pIndex < pathSegments.lastIndex) {
+                    prefixSegments = pathSegments.subList(0, pIndex + 1)
+                    alistPathSegments = pathSegments.subList(pIndex + 1, pathSegments.size)
+                } else {
+                    alistPathSegments = pathSegments
+                }
+            }
+
+            if (alistPathSegments.isEmpty()) {
+                return null
+            }
+            val basePath =
+                if (prefixSegments.isEmpty()) "" else "/" + prefixSegments.joinToString("/")
+            val derivedPath = "/" + alistPathSegments.joinToString("/")
+
+            val slugParts = mutableListOf(host)
+            slugParts.addAll(prefixSegments)
+            slugParts.addAll(alistPathSegments)
+            val idHint = slugify(*slugParts.toTypedArray())
+
+            val nameHintRaw = alistPathSegments.lastOrNull()?.takeIf { it.isNotBlank() } ?: host
+            val nameHint = nameHintRaw
+                ?.replace('-', ' ')
+                ?.replace('_', ' ')
+                ?.trim()
+                ?.split("\\s+".toRegex())
+                ?.filter { it.isNotBlank() }
+                ?.joinToString(" ") { word ->
+                    val lower = word.lowercase(Locale.ROOT)
+                    lower.replaceFirstChar { it.uppercaseChar() }
+                }
+
+            val queryPassword = run {
+                val query = uri.rawQuery
+                if (query.isNullOrBlank()) {
+                    null
+                } else {
+                    val candidates = setOf("pw", "password", "pwd", "pass", "access_code")
+                    var found: String? = null
+                    for (param in query.split("&")) {
+                        if (param.isBlank()) {
+                            continue
+                        }
+                        val keyValue = param.split("=", limit = 2)
+                        val rawKey = keyValue[0]
+                        val rawValue = if (keyValue.size > 1) keyValue[1] else ""
+                        val decodedKey =
+                            URLDecoder.decode(rawKey, StandardCharsets.UTF_8.name())
+                                .lowercase(Locale.ROOT)
+                        if (decodedKey !in candidates) {
+                            continue
+                        }
+                        val decodedValue =
+                            URLDecoder.decode(rawValue, StandardCharsets.UTF_8.name()).trim()
+                        if (decodedValue.isNotEmpty()) {
+                            found = decodedValue
+                            break
+                        }
+                    }
+                    found
+                }
+            }
+
+            AlistDerivedConfig(
+                apiUrl = origin + basePath + "/api/fs/list",
+                path = normalizePath(derivedPath),
+                downloadUrl = origin + basePath + "/d/" + alistPathSegments.joinToString("/"),
+                idHint = idHint,
+                nameHint = nameHint,
+                passwordHint = queryPassword
+            )
+        } catch (e: Exception) {
+            KanoLog.d(TAG, "Failed to derive AList config: ${e.message}")
+            null
+        }
+    }
+
     fun sanitizeSource(json: JSONObject, builtIn: Boolean): JSONObject? {
         val id = json.optString("id").trim()
         val name = json.optString("name").trim()
-        val apiUrl = json.optString("apiUrl").trim()
-        val path = json.optString("path").trim()
-        val downloadUrl = json.optString("downloadUrl").trim().trimEnd('/')
         val password = json.optString("password", "").trim()
+        val rawApiUrl = json.optString("apiUrl").trim()
+        val rawPath = json.optString("path").trim()
+        val rawDownloadUrl = json.optString("downloadUrl").trim()
 
-        if (id.isBlank() || name.isBlank() || apiUrl.isBlank() || path.isBlank() || downloadUrl.isBlank()) {
+        val derived = if (rawDownloadUrl.isNotBlank()) {
+            deriveAlistConfigFromDownload(rawDownloadUrl)
+        } else {
+            null
+        }
+
+        val finalDownloadUrl = (derived?.downloadUrl ?: rawDownloadUrl).trim().trimEnd('/')
+        val finalApiUrl = (derived?.apiUrl ?: rawApiUrl).trim()
+        val finalPath = normalizePath(derived?.path ?: rawPath)
+        val finalPassword = when {
+            password.isNotBlank() -> password
+            !derived?.passwordHint.isNullOrBlank() -> derived?.passwordHint ?: ""
+            else -> ""
+        }
+
+        if (finalDownloadUrl.isBlank()) {
+            return null
+        }
+
+        if (finalApiUrl.isBlank() || finalPath.isBlank()) {
+            return null
+        }
+
+        val resolvedId = if (id.isNotBlank()) {
+            id
+        } else {
+            val generated = (derived?.idHint ?: slugFromUrl(finalDownloadUrl)).orEmpty().trim()
+            val normalized = if (generated.isNotBlank()) {
+                generated
+            } else {
+                Integer.toUnsignedString(finalDownloadUrl.hashCode(), 16)
+            }
+            if (normalized.startsWith("auto-")) normalized else "auto-$normalized"
+        }
+
+        if (resolvedId.isBlank()) {
+            return null
+        }
+
+        val nameHint = derived?.nameHint
+        val resolvedName = if (name.isNotBlank()) {
+            name
+        } else {
+            nameHint?.takeIf { it.isNotBlank() } ?: resolvedId
+        }
+
+        if (resolvedName.isBlank()) {
             return null
         }
 
         return JSONObject().apply {
-            put("id", id)
-            put("name", name)
-            put("apiUrl", apiUrl)
-            put("path", path)
-            put("downloadUrl", downloadUrl)
-            put("password", password)
+            put("id", resolvedId)
+            put("name", resolvedName)
+            put("apiUrl", finalApiUrl)
+            put("path", finalPath)
+            put("downloadUrl", finalDownloadUrl)
+            put("password", finalPassword)
             put("builtIn", builtIn)
         }
     }

@@ -5563,8 +5563,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 id: row.dataset.id || generatePluginSourceId(),
                 builtIn,
                 name: '',
-                apiUrl: '',
-                path: '',
                 downloadUrl: '',
                 password: ''
             }
@@ -5572,7 +5570,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 entry[input.dataset.field] = input.value.trim()
             })
             if (!builtIn && !allowIncomplete) {
-                if (!entry.name || !entry.apiUrl || !entry.path || !entry.downloadUrl) {
+                if (!entry.downloadUrl) {
                     throw new Error('invalid')
                 }
             }
@@ -5585,6 +5583,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         const list = document.querySelector('#pluginSourceManagerList')
         if (!list) return
         list.innerHTML = ''
+
         pluginSourceDraft.forEach(source => {
             const row = document.createElement('div')
             row.className = 'plugin-source-row'
@@ -5622,32 +5621,47 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
 
             row.appendChild(header)
 
-            const fields = [
-                { key: 'name', label: t('plugin_source_name'), placeholder: t('plugin_source_name_placeholder') },
-                { key: 'apiUrl', label: t('plugin_source_api_url'), placeholder: t('plugin_source_api_placeholder') },
-                { key: 'path', label: t('plugin_source_path'), placeholder: t('plugin_source_path_placeholder') },
-                { key: 'downloadUrl', label: t('plugin_source_download_url'), placeholder: t('plugin_source_download_placeholder') },
-                { key: 'password', label: t('plugin_source_password'), placeholder: t('plugin_source_password_placeholder') }
-            ]
+            // 名称（自定义源可编辑，内置源仅展示标题）
+            if (!source.builtIn) {
+                const nameWrapper = document.createElement('label')
+                nameWrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
+                const nameLabel = document.createElement('span')
+                nameLabel.textContent = t('plugin_source_name')
+                const nameInput = document.createElement('input')
+                nameInput.dataset.field = 'name'
+                nameInput.value = source.name || ''
+                nameInput.placeholder = t('plugin_source_name_placeholder')
+                nameInput.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
+                nameWrapper.appendChild(nameLabel)
+                nameWrapper.appendChild(nameInput)
+                row.appendChild(nameWrapper)
+            }
 
-            fields.forEach(field => {
-                const wrapper = document.createElement('label')
-                wrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
-                const span = document.createElement('span')
-                span.textContent = field.label
-                const input = document.createElement('input')
-                input.dataset.field = field.key
-                input.value = source[field.key] || ''
-                input.placeholder = field.placeholder || ''
-                input.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
-                if (source.builtIn && field.key !== 'password') {
-                    input.disabled = true
-                    input.style.opacity = '0.6'
-                }
-                wrapper.appendChild(span)
-                wrapper.appendChild(input)
-                row.appendChild(wrapper)
-            })
+            const downloadWrapper = document.createElement('label')
+            downloadWrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
+            const downloadLabel = document.createElement('span')
+            downloadLabel.textContent = t('plugin_source_download_url')
+            const downloadInput = document.createElement('input')
+            downloadInput.dataset.field = 'downloadUrl'
+            downloadInput.value = source.downloadUrl || ''
+            downloadInput.placeholder = t('plugin_source_download_placeholder')
+            downloadInput.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
+            downloadWrapper.appendChild(downloadLabel)
+            downloadWrapper.appendChild(downloadInput)
+            row.appendChild(downloadWrapper)
+
+            const passwordWrapper = document.createElement('label')
+            passwordWrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
+            const passwordLabel = document.createElement('span')
+            passwordLabel.textContent = t('plugin_source_password')
+            const passwordInput = document.createElement('input')
+            passwordInput.dataset.field = 'password'
+            passwordInput.value = source.password || ''
+            passwordInput.placeholder = t('plugin_source_password_placeholder')
+            passwordInput.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
+            passwordWrapper.appendChild(passwordLabel)
+            passwordWrapper.appendChild(passwordInput)
+            row.appendChild(passwordWrapper)
 
             list.appendChild(row)
         })
