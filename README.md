@@ -10,6 +10,11 @@
 ## 下载与使用
  请前往[github action](https://github.com/XuF163/UFI-TOOLS/actions)获取最新编译的apk
 
+- 插件商店配置  
+  例如，你的自建openlist插件目录为：http://ip:5244/UFI_TOOLS_PLUGIN 
+  ![img.png](img/openlist.png)
+  则插件商店应该配置如下：  
+  ![img.png](img/自定义插件商店.png)
 ## 许可证  
 GNU Affero General Public License v3.0
 
