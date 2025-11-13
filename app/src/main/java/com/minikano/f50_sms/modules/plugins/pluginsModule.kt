@@ -462,6 +462,72 @@ fun Route.pluginsModule(context: Context) {
                 alistResponse?.close()
             }
         }
+
+        // 获取带签名的直链（用于第三方 AList 受保护目录）
+        get("/api/plugin_signed_link") {
+            var alistResponse: okhttp3.Response? = null
+            try {
+                val name = call.request.queryParameters["name"]?.trim()
+                if (name.isNullOrBlank()) {
+                    throw Exception("missing name")
+                }
+
+                val sources = loadPluginSources()
+                if (sources.length() == 0) throw Exception("no source")
+
+                val requestedId = call.request.queryParameters["sourceId"]
+                var targetSource = sources.getJSONObject(0)
+                for (i in 0 until sources.length()) {
+                    val candidate = sources.optJSONObject(i) ?: continue
+                    if (candidate.optString("id") == requestedId) {
+                        targetSource = candidate
+                        break
+                    }
+                }
+
+                val apiUrl = targetSource.optString("apiUrl")
+                val downloadUrl = targetSource.optString("downloadUrl")
+                val basePath = targetSource.optString("path")
+                val password = targetSource.optString("password", "")
+
+                if (apiUrl.isBlank() || basePath.isBlank() || downloadUrl.isBlank()) {
+                    throw Exception("bad source")
+                }
+
+                val getUrl = when {
+                    apiUrl.endsWith("/fs/list") -> apiUrl.removeSuffix("/fs/list") + "/fs/get"
+                    apiUrl.endsWith("/api/fs/list") -> apiUrl.removeSuffix("/api/fs/list") + "/api/fs/get"
+                    else -> apiUrl.replace("/list", "/get")
+                }
+
+                val fullPath = (if (basePath.startsWith("/")) basePath else "/$basePath").trimEnd('/') + "/" + name
+                val reqJson = JSONObject().apply {
+                    put("path", fullPath)
+                    put("password", password)
+                }
+
+                alistResponse = KanoRequest.postJson(getUrl, reqJson.toString())
+                val bodyStr = alistResponse.body?.string()
+                val obj = if (!bodyStr.isNullOrBlank()) JSONObject(bodyStr) else JSONObject()
+                val data = obj.optJSONObject("data")
+                var finalUrl = data?.optString("raw_url").orEmpty()
+                if (finalUrl.isBlank()) finalUrl = data?.optString("url").orEmpty()
+                if (finalUrl.isBlank()) {
+                    // 回退：拼接基础下载地址
+                    finalUrl = downloadUrl.trimEnd('/') + "/" + name
+                }
+
+                val resp = JSONObject().apply { put("url", finalUrl) }
+                call.response.headers.append("Access-Control-Allow-Origin", "*")
+                call.respondText(resp.toString(), ContentType.Application.Json, HttpStatusCode.OK)
+            } catch (e: Exception) {
+                KanoLog.d(TAG, "签名直链获取失败: ${e.message}")
+                call.response.headers.append("Access-Control-Allow-Origin", "*")
+                call.respondText("""{"error":"failed"}""", ContentType.Application.Json, HttpStatusCode.BadRequest)
+            } finally {
+                alistResponse?.close()
+            }
+        }
     }
 
     //读取自定义头部

@@ -17,6 +17,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.InetAddress
 import java.net.URI
 import java.net.UnknownHostException
+import org.json.JSONArray
+import org.json.JSONObject
 
 val unsafeHeaderNames = setOf(
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
@@ -62,7 +64,7 @@ fun Route.anyProxyModule(context: Context) {
     route("/api/proxy/{...}") {
         handle {
             val rawPath = call.request.uri.removePrefix("/api/proxy/")
-            val targetUrl = rawPath.removePrefix("--")
+            var targetUrl = rawPath.removePrefix("--")
 
             if (isForbiddenHost(targetUrl)) {
                 call.respond(HttpStatusCode.Forbidden, "Access to target address is not allowed.")
@@ -102,6 +104,116 @@ fun Route.anyProxyModule(context: Context) {
                 } else if (isSafeHeader(key)) {
                     headersBuilder.addUnsafeNonAscii(key, values.first())
                 }
+            }
+
+            // 针对 AList 直链缺少签名（sign/expire）的情况，尝试用配置的插件源换取带签名直链
+            fun resolveSignedAlistUrlIfNeeded(original: String): String? {
+                return try {
+                    val uri = URI(original)
+                    val rawQuery = uri.rawQuery ?: ""
+                    if (rawQuery.contains("sign=") || rawQuery.contains("expires=") || rawQuery.contains("token=")) return null
+
+                    val segments = uri.path?.split('/')?.filter { it.isNotBlank() } ?: emptyList()
+                    val dIdx = segments.indexOf("d")
+                    if (dIdx == -1 || dIdx >= segments.lastIndex) return null
+
+                    val prefixSegs = segments.subList(0, dIdx)
+                    val afterDSegs = segments.subList(dIdx + 1, segments.size)
+                    if (afterDSegs.isEmpty()) return null
+
+                    val origin = buildString {
+                        append(uri.scheme).append("://").append(uri.host)
+                        if (uri.port != -1) append(":").append(uri.port)
+                    }
+                    val prefixPath = if (prefixSegs.isEmpty()) "" else "/" + prefixSegs.joinToString("/")
+
+                    val sp = context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+                    val stored = sp.getString("kano_plugin_sources", null)
+                    val sources = mutableListOf<JSONObject>()
+                    if (!stored.isNullOrBlank()) {
+                        try {
+                            val arr = JSONArray(stored)
+                            for (i in 0 until arr.length()) {
+                                val o = arr.optJSONObject(i) ?: continue
+                                sources.add(o)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                    // 可选注入官方源，避免漏配
+                    run {
+                        val def = JSONObject()
+                        def.put("apiUrl", "https://pan.kanokano.cn/api/fs/list")
+                        def.put("path", "/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins")
+                        def.put("downloadUrl", "https://pan.kanokano.cn/d/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins")
+                        def.put("password", "")
+                        sources.add(0, def)
+                    }
+
+                    for (src in sources) {
+                        val srcDownload = src.optString("downloadUrl").trim().trimEnd('/')
+                        if (srcDownload.isBlank()) continue
+                        val srcUri = try { URI(srcDownload) } catch (_: Exception) { null } ?: continue
+                        val srcOrigin = buildString {
+                            append(srcUri.scheme).append("://").append(srcUri.host)
+                            if (srcUri.port != -1) append(":").append(srcUri.port)
+                        }
+                        val srcSegs = srcUri.path.split('/').filter { it.isNotBlank() }
+                        val sdIdx = srcSegs.indexOf("d")
+                        if (sdIdx == -1 || sdIdx >= srcSegs.lastIndex) continue
+                        val srcPrefix = srcSegs.subList(0, sdIdx)
+                        val srcAlistPath = srcSegs.subList(sdIdx + 1, srcSegs.size)
+
+                        val srcPrefixPath = if (srcPrefix.isEmpty()) "" else "/" + srcPrefix.joinToString("/")
+                        if (origin != srcOrigin || prefixPath != srcPrefixPath) continue
+
+                        val cfgPath = src.optString("path").trim('/')
+                        val cfgSegs = cfgPath.split('/').filter { it.isNotBlank() }
+                        if (cfgSegs != srcAlistPath) continue
+
+                        if (afterDSegs.size < cfgSegs.size) continue
+                        val rest = afterDSegs.drop(cfgSegs.size).joinToString("/")
+                        if (rest.isBlank()) continue
+
+                        val apiList = src.optString("apiUrl").trim()
+                        if (apiList.isBlank()) continue
+                        val getUrl = when {
+                            apiList.endsWith("/fs/list") -> apiList.removeSuffix("/fs/list") + "/fs/get"
+                            apiList.endsWith("/api/fs/list") -> apiList.removeSuffix("/api/fs/list") + "/api/fs/get"
+                            else -> apiList.replace("/list", "/get")
+                        }
+
+                        val fullPath = "/" + cfgSegs.joinToString("/") + "/" + rest
+                        val pwd = src.optString("password", "")
+                        val payload = JSONObject().apply {
+                            put("path", fullPath)
+                            put("password", pwd)
+                        }
+
+                        val client = OkHttpClient()
+                        val body = payload.toString().toRequestBody("application/json;charset=utf-8".toMediaTypeOrNull())
+                        val req = Request.Builder().url(getUrl).post(body).build()
+                        client.newCall(req).execute().use { resp ->
+                            val b = resp.body?.string()
+                            if (!resp.isSuccessful || b.isNullOrBlank()) return@use
+                            val obj = JSONObject(b)
+                            val data = obj.optJSONObject("data")
+                            val raw = data?.optString("raw_url").orEmpty()
+                            val url = if (raw.isNotBlank()) raw else data?.optString("url").orEmpty()
+                            if (url.isNotBlank()) throw java.lang.RuntimeException("__ALIST_SIGNED__:" + url)
+                        }
+                    }
+                    null
+                } catch (e: Exception) {
+                    val msg = e.message ?: ""
+                    if (msg.startsWith("__ALIST_SIGNED__:")) {
+                        return msg.removePrefix("__ALIST_SIGNED__:")
+                    }
+                    null
+                }
+            }
+
+            resolveSignedAlistUrlIfNeeded(targetUrl)?.let { signed ->
+                targetUrl = signed
             }
 
             val request = Request.Builder()
