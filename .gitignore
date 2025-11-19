@@ -19,3 +19,7 @@ app/src/main/assets/dictionary.json
 app/frontEnd/node_modules/*/**
 app/frontEnd/node_modules/*
 /plugin_test/
+/gen_install_cmds_from_lines.sh
+/generated_ufi_boot_1116.sh
+/tmp_install_cmds.sh
+/tmp_ufi_boot_1116.sh
