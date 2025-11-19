@@ -5099,6 +5099,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 let res4 = await runShellWithRoot("pm uninstall -k --user 0 com.zte.zdmdaemon.install")
                 let res5 = await runShellWithRoot("pm uninstall -k --user 0 com.zte.analytics")
                 let res6 = await runShellWithRoot("pm uninstall -k --user 0 com.zte.neopush")
+                let res7 = await runShellWithRoot("am force-stop com.zte.zdm")
                 AD_RESULT.innerHTML = `
                 <div style="min-width:200px;font-size:12px">
                 <p>${t('advanced_checked_disabled_update')}</p>
@@ -5109,6 +5110,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 <p>${res4.content}</p>
                 <p>${res5.content}</p>
                 <p>${res6.content}</p>
+                <p>${res7.content}</p>
                 </div>`
             } else {
                 createToast(t('toast_not_enabled_advanced_tools'), '')
