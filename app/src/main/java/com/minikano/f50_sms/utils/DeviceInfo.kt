@@ -3,8 +3,10 @@ package com.minikano.f50_sms.utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 
 /*
 * 感谢群内 执念 大哥提供的思路
@@ -22,6 +24,12 @@ data class MemoryInfo(
     val swapFree: Long,
     val swapUsed: Long,
     val swapUsagePercent: Double
+)
+
+data class UsbDevice(
+    val path: String,
+    val product: String,
+    val speed: Int
 )
 
 fun buildJsonObject(block: JSONObject.() -> Unit): JSONObject {
@@ -225,5 +233,78 @@ private fun parseMicroAmp(text: String): Int {
 
 private fun parseMicroVolt(text: String): Int {
     return text.toIntOrNull() ?: -1
+}
+
+suspend fun readUsbDevices(): Pair<Int, String> = withContext(Dispatchers.IO) {
+    val usbDir = File("/sys/bus/usb/devices")
+    val devices = mutableListOf<UsbDevice>()
+    var maxSpeed = 0
+    var gadgetSpeed = "unknown"
+
+    usbDir.listFiles()?.forEach { deviceDir ->
+        val productFile = File(deviceDir, "product")
+        val speedFile = File(deviceDir, "speed")
+
+        if (productFile.exists() && speedFile.exists()) {
+            try {
+                val product = productFile.readText().trim()
+                val speed = speedFile.readText().trim().toIntOrNull() ?: 0
+                if (
+                    !(deviceDir.name.startsWith("usb")) &&
+                    !(product.contains("Host Controller", ignoreCase = true)) &&
+                    !(product.contains("HDRC", ignoreCase = true))
+                ) {
+                    if (speed > maxSpeed) maxSpeed = speed
+                    devices.add(UsbDevice(deviceDir.name, product, speed))
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    var typeCMode = "unknown"
+    val portStateFile = File("/sys/class/android_usb/android0/state")
+    if (portStateFile.exists()) {
+        val state = portStateFile.readText().trim().uppercase(Locale.getDefault())
+        typeCMode = if (state == "DISCONNECTED") "host" else "gadget"
+    }
+
+    if (typeCMode == "gadget") {
+        val udcDir = File("/sys/class/udc")
+        if (udcDir.exists()) {
+            var speed = "Unknown"
+            udcDir.listFiles()?.forEach { udc ->
+                val speedFile = File(udc, "current_speed")
+                if (speedFile.exists()) {
+                    val raw = speedFile.readText().trim()
+                    if (raw != "UNKNOWN") {
+                        speed = when (raw) {
+                            "low-speed" -> "USB 1.0 (1.5Mbps)"
+                            "full-speed" -> "USB 1.1 (12Mbps)"
+                            "high-speed" -> "USB 2.0 (480Mbps)"
+                            "super-speed" -> "USB 3.0 (5Gbps)"
+                            "super-speed-plus" -> "USB 3.1 (10Gbps)"
+                            else -> raw
+                        }
+                    }
+                }
+            }
+            gadgetSpeed = speed
+        }
+    }
+
+    val jsonArray = JSONArray()
+    devices.forEach { dev ->
+        val obj = JSONObject()
+        obj.put("path", dev.path)
+        obj.put("product", dev.product)
+        obj.put("speed", dev.speed)
+        jsonArray.put(obj)
+    }
+    val jsonRoot = JSONObject()
+    jsonRoot.put("typec_mode", typeCMode)
+    jsonRoot.put("gadget_speed", gadgetSpeed)
+    jsonRoot.put("devices", jsonArray)
+
+    return@withContext Pair(maxSpeed, jsonRoot.toString())
 }
 

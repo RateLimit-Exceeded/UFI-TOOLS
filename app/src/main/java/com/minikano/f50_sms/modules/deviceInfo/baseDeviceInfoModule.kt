@@ -14,6 +14,7 @@ import com.minikano.f50_sms.utils.getCpuFreqJson
 import com.minikano.f50_sms.utils.getMemoryUsage
 import com.minikano.f50_sms.utils.readBatteryStatus
 import com.minikano.f50_sms.utils.readThermalZones
+import com.minikano.f50_sms.utils.readUsbDevices
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -309,6 +310,28 @@ fun Route.baseDeviceInfoModule(context: Context) {
             call.response.headers.append("Access-Control-Allow-Origin", "*")
             call.respondText(
                 """{"error":"获取TOKEN信息出错"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.InternalServerError
+            )
+        }
+    }
+
+    get("/api/usb_status") {
+        try {
+            val (maxSpeed, details) = readUsbDevices()
+            val jsonResult = """
+            {
+                "maxSpeed":$maxSpeed,
+                "details":$details
+            }
+        """.trimIndent()
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(jsonResult, ContentType.Application.Json)
+        } catch (e: Exception) {
+            KanoLog.d("kano_ZTE_LOG", "��ȡUsbDevices��Ϣ������${e.message}")
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"error":"��ȡUsbDevices��Ϣ����"}""",
                 ContentType.Application.Json,
                 HttpStatusCode.InternalServerError
             )
