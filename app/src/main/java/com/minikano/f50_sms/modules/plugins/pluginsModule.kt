@@ -279,10 +279,9 @@ fun Route.pluginsModule(context: Context) {
 
     fun storeCustomPluginSources(customSources: JSONArray) {
         val sharedPref = context.getSharedPreferences(pluginSourcePrefName, Context.MODE_PRIVATE)
-        sharedPref.edit().apply {
-            putString(pluginSourcePrefKey, customSources.toString())
-            apply()
-        }
+        sharedPref.edit()
+            .putString(pluginSourcePrefKey, customSources.toString())
+            .commit()
     }
 
     authenticatedRoute(context){
@@ -302,10 +301,9 @@ fun Route.pluginsModule(context: Context) {
 
                 val sharedPref =
                     context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-                sharedPref.edit().apply {
-                    putString("kano_custom_head", text)
-                    apply()
-                }
+                sharedPref.edit()
+                    .putString("kano_custom_head", text)
+                    .commit()
 
                 call.response.headers.append("Access-Control-Allow-Origin", "*")
                 call.respondText(

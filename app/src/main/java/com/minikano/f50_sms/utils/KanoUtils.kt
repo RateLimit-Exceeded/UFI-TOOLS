@@ -25,6 +25,7 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import androidx.core.content.edit
 
 class KanoUtils {
     companion object {
@@ -295,14 +296,14 @@ class KanoUtils {
                             Toast.LENGTH_SHORT
                         ).show()
                     }
-                    prefs.edit().putString("gateway_ip", currentIp).apply()
+                    prefs.edit(commit = true) { putString("gateway_ip", currentIp) }
                     if (currentIp != null) {
                         onIpChanged?.invoke(currentIp)
                     } // 通知 Compose 更新 UI
                 }
             } else if (need_auto_ip == "true") {
                 //说明可能是第一次启动
-                prefs.edit().putString("gateway_ip", currentIp).apply()
+                prefs.edit().putString("gateway_ip", currentIp).commit()
                 KanoLog.d("kano_ZTE_LOG", "可能是第一次启动，自动修改IP网关为:$currentIp")
             }
         }

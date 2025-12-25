@@ -58,8 +58,7 @@ fun Route.smsModule(context: Context) {
                 putString("kano_smtp_to", smtpTo)
                 putString("kano_smtp_username", smtpUsername)
                 putString("kano_smtp_password", smtpPassword)
-                apply()
-            }
+            }.commit()
 
             KanoLog.d(TAG, "SMTP配置已保存：$smtpHost:$smtpPort [$smtpUsername]")
 
@@ -129,8 +128,7 @@ fun Route.smsModule(context: Context) {
             sharedPrefs.edit().apply {
                 putString("kano_sms_forward_method", "CURL")
                 putString("kano_sms_curl", originalCurl)
-                apply()
-            }
+            }.commit()
 
             // 发送测试消息
             val test_msg =
@@ -183,8 +181,7 @@ fun Route.smsModule(context: Context) {
                 context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
             sharedPrefs.edit().apply {
                 putString("kano_sms_forward_enabled", enable)
-                apply()
-            }
+            }.commit()
 
             call.response.headers.append("Access-Control-Allow-Origin", "*")
             call.respondText(
@@ -247,8 +244,7 @@ fun Route.smsModule(context: Context) {
                 putString("kano_sms_forward_method", "DINGTALK")
                 putString("kano_dingtalk_webhook", webhookUrl)
                 putString("kano_dingtalk_secret", secret)
-                apply()
-            }
+            }.commit()
 
             KanoLog.d(TAG, "钉钉配置已保存：$webhookUrl")
 

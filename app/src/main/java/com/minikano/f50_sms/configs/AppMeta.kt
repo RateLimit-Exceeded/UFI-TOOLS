@@ -16,7 +16,6 @@ object AppMeta {
         private set
     var isDeviceRooted:Boolean = false
         private set
-    var isReadUseTerms:Boolean = false
 
     fun init(context: Context) {
         try {
@@ -27,8 +26,6 @@ object AppMeta {
             model = if (Build.MODEL.contains("MU5352")) "U30 Lite" else Build.MODEL
             val socketPath = File(context.filesDir, "kano_root_shell.sock")
             isDeviceRooted = socketPath.exists()
-            val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            isReadUseTerms = sharedPrefs.getString("isReadUseTerms", "false").toBoolean()
         } catch (e: Exception) {
             KanoLog.e("kano_ZTE_LOG","AppMeta init failed！！")
         }

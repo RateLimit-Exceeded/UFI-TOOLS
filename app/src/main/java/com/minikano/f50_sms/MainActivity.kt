@@ -93,22 +93,22 @@ class MainActivity : ComponentActivity() {
         //第一次启动初始化login_token
         val spf = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if(!spf.contains(PREF_LOGIN_TOKEN)){
-            spf.edit().putString(PREF_LOGIN_TOKEN, "admin").apply()
+            spf.edit().putString(PREF_LOGIN_TOKEN, "admin").commit()
         }
         if(!spf.contains(PREF_ISDEBUG)){
-            spf.edit().putString(PREF_ISDEBUG, "false").apply()
+            spf.edit().putString(PREF_ISDEBUG, "false").commit()
         }
         if(!spf.contains(PREF_GATEWAY_IP)){
-            spf.edit().putString(PREF_GATEWAY_IP, "192.168.0.1:8080").apply()
+            spf.edit().putString(PREF_GATEWAY_IP, "192.168.0.1:8080").commit()
         }
         if(!spf.contains(PREF_TOKEN_ENABLED)){
-            spf.edit().putString(PREF_TOKEN_ENABLED, true.toString()).apply()
+            spf.edit().putString(PREF_TOKEN_ENABLED, true.toString()).commit()
         }
         if(!spf.contains(PREF_AUTO_IP_ENABLED)){
-            spf.edit().putString(PREF_AUTO_IP_ENABLED, true.toString()).apply()
+            spf.edit().putString(PREF_AUTO_IP_ENABLED, true.toString()).commit()
         }
         if(!spf.contains(PREF_WAKELOCK)){
-            spf.edit().putString(PREF_WAKELOCK,"lock").apply()
+            spf.edit().putString(PREF_WAKELOCK,"lock").commit()
         }
 
         // 这里用协程异步调用
@@ -316,7 +316,7 @@ class MainActivity : ComponentActivity() {
                             onDebugChange = {
                                 isEnableLog = it
                                 isDebugLog = it.toString()
-                                sharedPrefs.edit().putString(PREF_ISDEBUG, isEnableLog.toString()).apply()
+                                sharedPrefs.edit().putString(PREF_ISDEBUG, isEnableLog.toString()).commit()
                             },
                             onIsWkLockChange = {
                                 wakeLock = if(it){
@@ -327,11 +327,13 @@ class MainActivity : ComponentActivity() {
                             },
                             onConfirm = {
                                 // 保存并重启服务器
-                                sharedPrefs.edit().putString(PREF_GATEWAY_IP, gatewayIp).apply()
-                                sharedPrefs.edit().putString(PREF_LOGIN_TOKEN, loginToken.ifBlank { "admin" }).apply()
-                                sharedPrefs.edit().putString(PREF_TOKEN_ENABLED, isTokenEnabled).apply()
-                                sharedPrefs.edit().putString(PREF_AUTO_IP_ENABLED, isAutoIpEnabled).apply()
-                                sharedPrefs.edit().putString(PREF_WAKELOCK, wakeLock).apply()
+                                sharedPrefs.edit()
+                                    .putString(PREF_GATEWAY_IP, gatewayIp)
+                                    .putString(PREF_LOGIN_TOKEN, loginToken.ifBlank { "admin" })
+                                    .putString(PREF_TOKEN_ENABLED, isTokenEnabled)
+                                    .putString(PREF_AUTO_IP_ENABLED, isAutoIpEnabled)
+                                    .putString(PREF_WAKELOCK, wakeLock)
+                                    .commit()
                                 //更新唤醒锁
                                 if(wakeLock != "lock"){
                                     WakeLock.releaseWakeLock()

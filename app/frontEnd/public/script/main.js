@@ -478,7 +478,6 @@ function main_func() {
         initCellularSpeedTestBtn()
         initSleepTime()
         initAdvanceTools()
-        initTerms()
         QOSRDPCommand("AT+CGEQOSRDP=1")
     }
 
@@ -578,7 +577,6 @@ function main_func() {
             localStorage.setItem('kano_sms_token', SHA256(token.trim()).toLowerCase())
             closeModal('#tokenModal')
             initRenderMethod()
-            initMessage()
         }
         catch (e) {
             toastTimer && clearTimeout(toastTimer)
@@ -1689,15 +1687,13 @@ function main_func() {
     }
 
     const toggleCellInfoRefresh = (e) => {
-        const target = e.target
-        if (target) {
-            const data = e.target.dataset.toggle
-            if (data != "1") {
-                toggleLkcellOpen(true)
-            } else {
-                toggleLkcellOpen(false)
-            }
-        }
+        const btn = e?.currentTarget?.closest?.('#lkCellRefreshBtn')
+            || e?.target?.closest?.('#lkCellRefreshBtn')
+            || document.querySelector('#lkCellRefreshBtn')
+        if (!btn) return
+        const data = btn.dataset.toggle
+        if (data != "1") toggleLkcellOpen(true)
+        else toggleLkcellOpen(false)
     }
 
     let onSelectCellRow = (pci, earfcn) => {
@@ -1751,6 +1747,7 @@ function main_func() {
                 pciEl.value = ''
                 earfcnEl.value = ''
                 createToast(t('toast_set_cell_success'), 'green')
+                await initCellInfo()
             } else {
                 throw t('toast_set_cell_failed')
             }
@@ -1778,6 +1775,7 @@ function main_func() {
 
             if (res.result == 'success') {
                 createToast(t('toast_unlock_cell_success'), 'green')
+                await initCellInfo()
             } else {
                 throw t('toast_unlock_cell_failed')
             }
@@ -3553,12 +3551,6 @@ function main_func() {
 
     //展开收起
     // 配置观察器_锁基站
-    const collapse_lkcell_stor = localStorage.getItem('collapse_lkcell') || 'close'
-    if (collapse_lkcell_stor == 'open') {
-        toggleLkcellOpen(true)
-    } else {
-        toggleLkcellOpen(false)
-    }
     collapseGen("#collapse_lkcell_btn", "#collapse_lkcell", "collapse_lkcell", (isOpen) => {
         if (isOpen == 'open') {
             toggleLkcellOpen(true)
@@ -3566,6 +3558,8 @@ function main_func() {
             toggleLkcellOpen(false)
         }
     })
+    const collapse_lkcell_stor = localStorage.getItem('collapse_lkcell') || 'open'
+    collapse_lkcell_stor == 'open' ? toggleLkcellOpen(true) : toggleLkcellOpen(false)
 
     //软件更新
     const queryUpdate = async () => {
@@ -5963,117 +5957,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         }
     }
     getSELinuxStatus()
-
-    const initTerms = async () => {
-        if (!(await initRequestData())) {
-            return null
-        }
-        const cache = localStorage.getItem('read_terms')
-        if (cache == "1") return
-        try {
-            const res = await (await fetchWithTimeout(`${KANO_baseURL}/version_info`)).json()
-            if (res.accept_terms && res.accept_terms.toString() == 'true') {
-                if (cache != "1") {
-                    localStorage.setItem('read_terms', '1')
-                }
-                return
-            }
-            // 用户协议
-            const md = createModal({
-                name: "kano_terms",
-                noBlur: true,
-                isMask: true,
-                title: t('useTermsTitle'),
-                contentStyle: "font-size:12px",
-                confirmBtnText: t('accept'),
-                closeBtnText: t('decline'),
-                onClose: () => {
-                    createToast(t('please_accept_terms'))
-                    return false
-                },
-                onConfirm: () => {
-                    const scroll = md.el.querySelector('.content')
-                    if ((scroll.scrollTop < scroll.clientHeight) || (scroll.scrollTop < 50)) {
-                        // 哎呀，你怎么又没认真看😯
-                        createToast(t('please_read_terms'))
-                        return false
-                    }
-                    fetchWithTimeout(`${KANO_baseURL}/accept_terms`, {
-                        method: "post",
-                        headers: common_headers,
-                    }).then(r => r.json()).then(res => {
-                        if (res.result == "success") {
-                            createToast(t('accept'))
-                        }
-                    })
-                    return true
-                },
-                content: t('useTerms')
-            })
-            showModal(md.id)
-        } catch {
-            //
-        }
-    }
-    initTerms()
-
-
-    // 获取消息
-    const initMessage = async () => {
-        if (!(await initRequestData())) {
-            return null
-        }
-        try {
-            const api = 'https://127.0.0.1/ufi_tools_report'
-            const { device_id: uuid } = await (await fetch(`${KANO_baseURL}/device_id`, {
-                headers: common_headers
-            })).json()
-            if (uuid) {
-                const { message, has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/get_message/${uuid}`, {
-                    headers: common_headers
-                })).json()
-                if (has_read_message == true || has_read_message == "true") return
-                const { text } = parseDOM(message) //过滤掉远程任何的script脚本，防止远程任意代码自动执行
-                const { el, close } = createFixedToast('kano_message', `
-                    <div style="pointer-events:all;width:80vw;max-width:300px">
-                        <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
-                        <div style="margin:10px 0" id="kano_message_inner">${text}</div>
-                        <div style="text-align:right">
-                            <button style="font-size:.64rem" id="close_message_btn" data-i18n="close_btn">${t('close_btn')}</button>
-                        </div>
-                    </div>
-                    `)
-                const btn = el.querySelector('#close_message_btn')
-                if (!btn) {
-                    close()
-                    return
-                }
-                btn.onclick = async () => {
-                    try {
-                        const { has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/set_read_message/${uuid}`, {
-                            method: 'post',
-                            headers: common_headers
-                        })).json()
-                        if (has_read_message) {
-                            close()
-                        }
-                    } catch {
-                        try {
-                            const { has_read_message } = await (await fetch(`${api}/set_read_message/${uuid}`, {
-                                method: 'post'
-                            })).json()
-                            if (has_read_message) {
-                                close()
-                            }
-                        } catch { }
-                    } finally {
-                        close()
-                    }
-                }
-            }
-        } catch { }
-    }
-    initMessage()
 
     const togglePort = async (port, flag, isBootup = false, v6 = false) => {
         try {

@@ -153,10 +153,9 @@ fun Route.themeModule(context: Context) {
 
                 val sharedPref =
                     context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-                sharedPref.edit().apply {
-                    putString("kano_theme", jsonStore)
-                    apply()
-                }
+                sharedPref.edit()
+                    .putString("kano_theme", jsonStore)
+                    .commit()
 
                 call.response.headers.append("Access-Control-Allow-Origin", "*")
                 call.respondText(
