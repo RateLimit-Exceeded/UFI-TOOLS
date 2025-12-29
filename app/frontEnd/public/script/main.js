@@ -1777,7 +1777,7 @@ function main_func() {
 
             if (res.result == 'success') {
                 createToast(t('toast_unlock_cell_success'), 'green')
-                await initCellInfo()
+                initCellInfo(true)
             } else {
                 throw t('toast_unlock_cell_failed')
             }
