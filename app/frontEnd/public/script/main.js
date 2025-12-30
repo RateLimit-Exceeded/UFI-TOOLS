@@ -479,6 +479,7 @@ function main_func() {
         initSleepTime()
         initAdvanceTools()
         QOSRDPCommand("AT+CGEQOSRDP=1")
+        initTTYD()
     }
 
     //检测是否启用高级功能
@@ -1625,7 +1626,7 @@ function main_func() {
     }
 
     //锁基站
-    let initCellInfo = async () => {
+    let initCellInfo = async (onlyRefreshLockedInfoList = false) => {
         try {
             //已锁基站信息
             //基站信息
@@ -1633,7 +1634,7 @@ function main_func() {
                 cmd: 'neighbor_cell_info,locked_cell_info'
             }))
 
-            if (neighbor_cell_info) {
+            if (neighbor_cell_info && !onlyRefreshLockedInfoList) {
                 const cellBodyEl = document.querySelector('#cellForm tbody')
                 cellBodyEl.innerHTML = neighbor_cell_info.map(item => {
                     const { band, earfcn, pci, rsrp, rsrq, sinr } = item
@@ -1747,7 +1748,8 @@ function main_func() {
                 pciEl.value = ''
                 earfcnEl.value = ''
                 createToast(t('toast_set_cell_success'), 'green')
-                await initCellInfo()
+                //刷新已锁基站列表（停止刷新时方便锁定多基站）
+                initCellInfo(true)
             } else {
                 throw t('toast_set_cell_failed')
             }
