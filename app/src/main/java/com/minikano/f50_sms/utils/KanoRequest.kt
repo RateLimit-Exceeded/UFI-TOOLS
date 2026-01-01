@@ -1,4 +1,6 @@
 package com.minikano.f50_sms.utils
+
+import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -9,10 +11,55 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.File
+import java.net.InetAddress
+import java.net.UnknownHostException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 class KanoRequest {
     companion object {
+        private class TimeoutDns(
+            private val timeoutMs: Long = 3000
+        ) : Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                val executor = Executors.newSingleThreadExecutor()
+                return try {
+                    val future = executor.submit<List<InetAddress>> {
+                        InetAddress.getAllByName(hostname).toList()
+                    }
+                    future.get(timeoutMs, TimeUnit.MILLISECONDS)
+                } catch (e: Exception) {
+                    throw UnknownHostException("DNS timeout: $hostname")
+                } finally {
+                    executor.shutdown()
+                }
+            }
+        }
+
+        private fun createClient(
+            dnsTimeoutMs: Long = 3000,
+            connectTimeoutSeconds: Long = 5,
+            readTimeoutSeconds: Long = 10,
+            writeTimeoutSeconds: Long = 10,
+            callTimeoutSeconds: Long? = 15,
+        ): OkHttpClient {
+            val builder = OkHttpClient.Builder()
+                .dns(TimeoutDns(dnsTimeoutMs))
+                .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
+                .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+                .writeTimeout(writeTimeoutSeconds, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(false)
+
+            if (callTimeoutSeconds != null) {
+                builder.callTimeout(callTimeoutSeconds, TimeUnit.SECONDS)
+            } else {
+                builder.callTimeout(0, TimeUnit.SECONDS)
+            }
+
+            return builder.build()
+        }
+
         fun postJson(url: String, json: String): Response {
-            val client = OkHttpClient()
+            val client = createClient()
 
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val body = json.toRequestBody(mediaType)
@@ -26,7 +73,7 @@ class KanoRequest {
         }
 
         fun getTextFromUrl(url: String): String? {
-            val client = OkHttpClient()
+            val client = createClient()
 
             val request = Request.Builder()
                 .url(url)
@@ -52,7 +99,12 @@ class KanoRequest {
             outputFile: File,
             onProgress: (percent: Int) -> Unit
         ): String? {
-            val client = OkHttpClient()
+            val client = createClient(
+                connectTimeoutSeconds = 10,
+                readTimeoutSeconds = 60,
+                writeTimeoutSeconds = 60,
+                callTimeoutSeconds = null
+            )
             val request = Request.Builder().url(url).build()
 
             client.newCall(request).execute().use { response ->
