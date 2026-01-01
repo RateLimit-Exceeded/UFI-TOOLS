@@ -5499,17 +5499,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         return `src_${Date.now().toString(16)}${Math.floor(Math.random() * 1e6).toString(16)}`
     }
 
-    const fallbackPluginSources = () => ([
-        {
-            id: 'official',
-            name: '官方源',
-            apiUrl: 'https://pan.kanokano.cn/api/fs/list',
-            path: '/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins',
-            downloadUrl: 'https://pan.kanokano.cn/d/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins',
-            password: '',
-            builtIn: true
-        }
-    ])
+    const fallbackPluginSources = () => ([])
 
     const fetchPluginSources = async () => {
         try {
@@ -5853,6 +5843,13 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         const items = document.querySelector('#plugin_store .plugin-items')
         const total = document.querySelector('#plugin_store .total')
         if (!items) return
+        if (!pluginSources.length) {
+            items.innerHTML = `<li style="padding:10px">未配置插件源，请点击「源管理」添加。</li>`
+            if (total) {
+                total.innerHTML = `${t('plugin_modal_num')}: 0`
+            }
+            return
+        }
         items.innerHTML = pluginStoreLoadingMarkup
         if (total) {
             total.innerHTML = ''
@@ -5918,6 +5915,18 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
             manageBtn.onclick = () => {
                 openPluginSourceManager()
             }
+        }
+
+        if (!pluginSources.length) {
+            const items = document.querySelector('#plugin_store .plugin-items')
+            const total = document.querySelector('#plugin_store .total')
+            if (items) {
+                items.innerHTML = `<li style="padding:10px">未配置插件源，请点击「源管理」添加。</li>`
+            }
+            if (total) {
+                total.innerHTML = `${t('plugin_modal_num')}: 0`
+            }
+            return
         }
 
         await loadPluginsForSource(activePluginSourceId)

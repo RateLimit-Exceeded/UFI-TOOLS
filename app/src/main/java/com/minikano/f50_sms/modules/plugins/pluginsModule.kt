@@ -240,28 +240,14 @@ fun Route.pluginsModule(context: Context) {
         }
     }
 
-    fun defaultPluginSource(): JSONObject {
-        val json = JSONObject()
-        json.put("id", "official")
-        json.put("name", "官方源")
-        json.put("apiUrl", "https://pan.kanokano.cn/api/fs/list")
-        json.put("path", "/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins")
-        json.put("downloadUrl", "https://pan.kanokano.cn/d/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins")
-        json.put("password", "")
-        json.put("builtIn", true)
-        return json
-    }
-
     fun loadPluginSources(): JSONArray {
         val result = JSONArray()
-        val defaultSource = defaultPluginSource()
-        result.put(defaultSource)
         val sharedPref = context.getSharedPreferences(pluginSourcePrefName, Context.MODE_PRIVATE)
         val stored = sharedPref.getString(pluginSourcePrefKey, null)
         if (!stored.isNullOrBlank()) {
             try {
                 val storedArray = JSONArray(stored)
-                val seenIds = mutableSetOf(defaultSource.optString("id"))
+                val seenIds = mutableSetOf<String>()
                 for (i in 0 until storedArray.length()) {
                     val raw = storedArray.optJSONObject(i) ?: continue
                     val sanitized = sanitizeSource(raw, false) ?: continue
@@ -351,18 +337,12 @@ fun Route.pluginsModule(context: Context) {
                 val bodyText = call.receiveText()
                 val json = JSONObject(bodyText)
                 val incomingSources = json.optJSONArray("sources") ?: JSONArray()
-                val defaultSource = defaultPluginSource()
                 val sanitizedForStorage = JSONArray()
-                val responseArray = JSONArray().apply { put(defaultSource) }
-                val seenIds = mutableSetOf(defaultSource.optString("id"))
+                val responseArray = JSONArray()
+                val seenIds = mutableSetOf<String>()
 
                 for (i in 0 until incomingSources.length()) {
                     val raw = incomingSources.optJSONObject(i) ?: continue
-                    val id = raw.optString("id")
-                    if (id == defaultSource.optString("id")) {
-                        // 默认源不可覆盖
-                        continue
-                    }
                     val sanitized = sanitizeSource(raw, false) ?: continue
                     val sourceId = sanitized.optString("id")
                     if (!seenIds.add(sourceId)) {

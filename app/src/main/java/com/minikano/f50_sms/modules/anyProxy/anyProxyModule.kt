@@ -139,15 +139,6 @@ fun Route.anyProxyModule(context: Context) {
                             }
                         } catch (_: Exception) {}
                     }
-                    // 可选注入官方源，避免漏配
-                    run {
-                        val def = JSONObject()
-                        def.put("apiUrl", "https://pan.kanokano.cn/api/fs/list")
-                        def.put("path", "/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins")
-                        def.put("downloadUrl", "https://pan.kanokano.cn/d/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins")
-                        def.put("password", "")
-                        sources.add(0, def)
-                    }
 
                     for (src in sources) {
                         val srcDownload = src.optString("downloadUrl").trim().trimEnd('/')
