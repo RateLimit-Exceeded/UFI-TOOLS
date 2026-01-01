@@ -139,6 +139,13 @@ class ADBService : Service() {
                 val adbPath = "shell/adb"
 
                 while (!Thread.currentThread().isInterrupted) {
+                    val isDebugEnabled = KanoUtils.isUsbDebuggingEnabled(context)
+                    if (!isDebugEnabled) {
+                        KanoLog.d("kano_ZTE_LOG", "ADB disabled, skipping keep-alive")
+                        adbIsReady = false
+                        Thread.sleep(11_000)
+                        continue
+                    }
                     KanoLog.d("kano_ZTE_LOG", "保活ADB服务中...")
 
                     var result =
