@@ -38,4 +38,4 @@ jobs:
           git checkout -B http-server-version upstream/http-server-version
           git push origin http-server-version --force-with-lease
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
