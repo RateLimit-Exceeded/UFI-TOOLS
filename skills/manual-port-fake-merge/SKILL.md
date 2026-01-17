@@ -1,14 +1,21 @@
 ---
 name: manual-port-fake-merge
-description: 在不直接 merge 上游代码的前提下，从远程分支手动提取指定修复/特性，并通过 `git merge -s ours` 创建“假的合并记录”来同步合并状态；适用于需要保持分支对齐/审计但只搬运少量提交（例如“fix:网络调试状态更新”）的场景。
+description: 在不直接 merge 上游分支的前提下，手动移植指定修复/特性到目标分支，并通过 `git merge -s ours` 创建“假的合并记录”来对齐合并关系（历史审计友好，且可避免二进制/构建产物冲突）。本仓库常见场景：从 `http-server-version` 移植到 `1007`。
 ---
 
 # 手动搬运 + 假合并（ours）
 
 ## 目标
 
-- 从 `origin/<upstream-branch>` 选择性搬运改动到当前分支（不直接 merge 上游文件变更）。
+- 从 `<upstream-remote>/<upstream-branch>` 选择性搬运改动到当前分支（不直接 merge 上游文件变更）。
 - 通过 “ours merge” 生成一个带双父节点的合并提交，用于**同步合并状态**（假合并记录）。
+
+## 本仓库默认分支（UFI-TOOLS）
+
+- 目标分支：`1007`
+- 上游分支：`http-server-version`
+- 上游 remote：优先使用 `upstream`（若未配置则用 `origin`）
+- 典型方向：`upstream/http-server-version` → `1007`（先手动 port，再 `-s ours` 假合并）
 
 ## 推荐流程（默认安全）
 
@@ -17,14 +24,14 @@ description: 在不直接 merge 上游代码的前提下，从远程分支手动
    - 不要把无关产物带进提交（常见：`.gradle/**.lock`、工具生成的 `.ace-tool/` 等）。
 
 2. 拉取目标远程分支（网络不稳定时用浅拉）
-   - `git fetch origin <upstream-branch>`
+   - `git fetch <upstream-remote> <upstream-branch>`
    - 如果出现 early EOF / timeout：
-     - `git fetch --no-tags --depth=50 origin <upstream-branch>`
+     - `git fetch --no-tags --depth=50 <upstream-remote> <upstream-branch>`
 
 3. 定位要搬运的提交
-   - `git log origin/<upstream-branch> --oneline --grep="<关键字>"`
+   - `git log <upstream-remote>/<upstream-branch> --oneline --grep="<关键字>"`
    - 或先看分支差异规模：
-     - `git rev-list --count HEAD..origin/<upstream-branch>`
+     - `git rev-list --count HEAD..<upstream-remote>/<upstream-branch>`
 
 4. 审核提交影响范围（先分清“源码 vs 产物”）
    - `git show --name-status <sha>`
@@ -47,7 +54,7 @@ description: 在不直接 merge 上游代码的前提下，从远程分支手动
    - 避免把 `app/release/**`、`.gradle/**`、`.ace-tool/**` 一起提交。
 
 8. 创建“假的合并记录”（ours merge，不引入文件变更）
-   - `git merge --no-ff -s ours origin/<upstream-branch> -m "chore: fake merge <upstream-branch> (manual port)"`
+   - `git merge --no-ff -s ours <upstream-remote>/<upstream-branch> -m "chore: fake merge <upstream-branch> (manual port)"`
 
 9. 校验假合并是否正确
    - `git show -s --pretty=raw HEAD`（应出现 2 行 `parent`）
@@ -67,4 +74,3 @@ description: 在不直接 merge 上游代码的前提下，从远程分支手动
 
 - `.gradle/**.lock` 意外变更：
   - `git restore .gradle/**` 后再继续。
-
