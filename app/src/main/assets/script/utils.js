@@ -212,6 +212,10 @@ function createToast(text, color, delay = 3000, fn = null) {
 
 function createFixedToast(_id, text, style = {}) {
     try {
+        const oldEl = document.getElementById(_id)
+        if (oldEl) {
+            oldEl.remove()
+        }
         const toastContainer = document.querySelector("#toastContainer")
         const toastEl = document.createElement('div')
         toastEl.id = _id
@@ -427,7 +431,14 @@ const collapseGen = (btn_id, collapse_id, storName, callback = undefined) => {
     try {
         const { el: collapseMenuEl } = createCollapseObserver(document.querySelector(collapse_id));
         if (storName) {
-            collapseMenuEl.dataset.name = localStorage.getItem(storName) || 'open';
+            const storVal = localStorage.getItem(storName)
+            if (storVal) {
+                collapseMenuEl.dataset.name = storVal;
+                localStorage.setItem(storName, storVal)
+            } else {
+                collapseMenuEl.dataset.name = 'open';
+                localStorage.setItem(storName, 'open')
+            }
         } else {
             collapseMenuEl.dataset.name = 'open'; // 默认打开
         }
@@ -739,6 +750,14 @@ if (selectAllBandChkBox) {
     }
 }
 
+const isPromise = (obj = null) => {
+    if (!obj) return false
+    return obj !== null && (
+        (obj instanceof Promise) ||
+        ((typeof obj === 'object' || typeof obj === 'function') && typeof obj.then === 'function') ||
+        Object.prototype.toString.call(obj) === '[object AsyncFunction]'
+    )
+}
 
 const createModal = ({ name, noBlur, isMask, title, maxWidth, content, contentStyle, confirmBtnText = t('submit_btn'), closeBtnText = t('close_btn'), onClose, onConfirm }) => {
     const html = `
@@ -793,10 +812,15 @@ const createModal = ({ name, noBlur, isMask, title, maxWidth, content, contentSt
         const close = mod.querySelector(`#${name}_close`)
         const debounceRemoveEl = debounce(() => mod.remove(), 1000)
         if (confirm) {
-            confirm.onclick = (e) => {
+            confirm.onclick = async (e) => {
                 e.preventDefault()
                 if (onConfirm) {
-                    let res = onConfirm()
+                    let res = null
+                    if (isPromise(onConfirm)) {
+                        res = await onConfirm()
+                    } else {
+                        res = onConfirm()
+                    }
                     if (res) {
                         closeModal("#" + name)
                         debounceRemoveEl()
@@ -805,10 +829,15 @@ const createModal = ({ name, noBlur, isMask, title, maxWidth, content, contentSt
             }
         }
         if (close) {
-            close.onclick = (e) => {
+            close.onclick = async (e) => {
                 e.preventDefault()
                 if (onClose) {
-                    let res = onClose()
+                    let res = null
+                    if (isPromise(onClose)) {
+                        res = await onClose()
+                    } else {
+                        res = onClose()
+                    }
                     if (res) {
                         closeModal("#" + name)
                         debounceRemoveEl()
@@ -936,7 +965,7 @@ const showLoginHelp = () => {
                         <div class="title" style="margin:0">🔑 登录帮助说明</div>
                         <div style="margin:10px 0;max-height:400px;overflow:auto">${message}</div>
                         <div style="text-align:right">
-                            <button style="font-size:.64rem" id="close_login_help_btn" data-i18n="close_btn">${t('close_btn')}</button>
+                            <button style="font-size:.64rem" id="close_login_help_btn" data-i18n="pay_btn_dismiss">${t('pay_btn_dismiss')}</button>
                         </div>
                     </div>
                     `)
@@ -965,5 +994,16 @@ function formatSpeed(bps, base = 1000 * 1000) {
         return mbps.toFixed(mbps >= 10 ? 0 : 1) + " Mbps";
     } else {
         return kbps.toFixed(kbps >= 10 ? 0 : 1) + " kbps";
+    }
+}
+
+const checkWeakToken = async () => {
+    try {
+        const res = await (await fetchWithTimeout(`${KANO_baseURL}/is_weak_token`)).json();
+        const is_weak_token = res && res.is_weak_token;
+        return is_weak_token === true;
+    } catch (e) {
+        console.error('checkWeakToken error:', e);
+        return false;
     }
 }

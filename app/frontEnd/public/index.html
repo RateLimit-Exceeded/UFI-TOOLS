@@ -8,7 +8,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="icon" type="image/svg+xml" href="./favicon.webp">
-    <title id="TITLE">ZTE-UFI-TOOLS-WEB</title>
+    <title id="TITLE">UFI-TOOLS-WEB</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/style/style.css">
     <script src="/script/polyfill.min.js"></script>
@@ -17,7 +17,6 @@
     <script src="/script/lib/sortable.js"></script>
     <script src="/script/lib/filesaver.js"></script>
     <script src="/script/lib/chart.js"></script>
-    <script src="/script/proxy-normalizer.js"></script>
 
     <script>
         const baseSize = 14;
@@ -56,18 +55,20 @@
                     <div class="collapse_box actions-buttons">
                         <button id="CLEAR" class="btn" data-i18n="login_btn">登录/登出</button>
                         <button class="btn REFRESH_BTN" data-i18n="stop_refresh">停止刷新</button>
+                        <button id="CHANGETOKEN" class="btn" data-i18n="change_token"
+                            onclick="createToast(t('please_login'),'red')">更改口令</button>
                         <button id="CHANGEPWD" class="btn" data-i18n="change_password"
-                            onclick="createToast('请登录','red')">更改密码</button>
+                            onclick="createToast(t('please_login'),'red')">更改密码</button>
                         <button id="REBOOT" class="btn" data-i18n="reboot"
-                            onclick="createToast('请登录','red')">重启设备</button>
+                            onclick="createToast(t('please_login'),'red')">重启设备</button>
                         <button id="SCHEDULE_REBOOT" class="btn" data-i18n="schedule_reboot"
-                            onclick="createToast('请登录','red')">定时重启</button>
+                            onclick="createToast(t('please_login'),'red')">定时重启</button>
                         <button id="SHUTDOWN" style="display: none;" class="btn" data-i18n="shutdown"
-                            onclick="createToast('请登录','red')">关机</button>
+                            onclick="createToast(t('please_login'),'red')">关机</button>
                         <button id="BG_SETTING" class="btn" data-i18n="bg_setting"
-                            onclick="createToast('请登录','red')">主题背景</button>
+                            onclick="createToast(t('please_login'),'red')">主题背景</button>
                         <button id="PLUGIN_SETTING" class="btn" data-i18n="plugin_setting"
-                            onclick="createToast('请登录','red')">插件功能</button>
+                            onclick="createToast(t('please_login'),'red')">插件功能</button>
                         <div style="display: inline-block;position: relative;">
                             <div class="tip" style="display: none;" id="UNREAD_SMS">0</div>
                             <button id="SMS" class="btn" data-i18n="sms">短信收发</button>
@@ -76,37 +77,40 @@
                         <button id="SpeedTestBtn" class="btn" data-i18n="speed_test"
                             onclick="showModal('#speedTestModal')">内网测速</button>
                         <button id="CellularSpeedTestBtn" class="btn" data-i18n="cellular_speed_test"
-                            onclick="createToast('请登录','red')">流量测速</button>
+                            onclick="createToast(t('please_login'),'red')">流量测速</button>
                         <button id="ClientManagement" class="btn" data-i18n="client_mgmt">接入设备</button>
                         <button id="WIFIManagement" class="btn" data-i18n="wifi_mgmt">WIFI设置</button>
                         <button id="LANManagement" class="btn" data-i18n="lan_mgmt">内网设置</button>
-                        <button id="AT" class="btn" data-i18n="at_cmd" onclick="createToast('请登录','red')">AT指令</button>
+                        <button id="AT" class="btn" data-i18n="at_cmd"
+                            onclick="createToast(t('please_login'),'red')">AT指令</button>
                         <button id="ADVANCE" class="btn" data-i18n="advanced"
-                            onclick="createToast('请登录','red')">高级功能</button>
+                            onclick="createToast(t('please_login'),'red')">高级功能</button>
                         <button id="CECULLAR" class="btn" data-i18n="cellular"
-                            onclick="createToast('请登录','red')">数据流量</button>
-                        <button id="ADB" class="btn" data-i18n="adb" onclick="createToast('请登录','red')">USB调试</button>
+                            onclick="createToast(t('please_login'),'red')">数据流量</button>
+                        <button id="ADB" class="btn" data-i18n="adb"
+                            onclick="createToast(t('please_login'),'red')">USB调试</button>
                         <button id="ADB_NET" class="btn" data-i18n="adb_autostart"
-                            onclick="createToast('请登录','red')">ADB自启</button>
+                            onclick="createToast(t('please_login'),'red')">ADB自启</button>
                         <button id="PERF" class="btn" data-i18n="performance_mode"
-                            onclick="createToast('请登录','red')">性能模式</button>
+                            onclick="createToast(t('please_login'),'red')">性能模式</button>
                         <button id="LIGHT" class="btn" data-i18n="indicator"
-                            onclick="createToast('请登录','red')">指示灯</button>
+                            onclick="createToast(t('please_login'),'red')">指示灯</button>
                         <button id="NFC" style="display: none;" class="btn" data-i18n="nfc"
-                            onclick="createToast('请登录','red')">NFC</button>
+                            onclick="createToast(t('please_login'),'red')">NFC</button>
                         <button id="SMB" class="btn" data-i18n="file_sharing"
-                            onclick="createToast('请登录','red')">文件共享</button>
+                            onclick="createToast(t('please_login'),'red')">文件共享</button>
                         <button id="ROAM" class="btn" data-i18n="network_roam"
-                            onclick="createToast('请登录','red')">网络漫游</button>
+                            onclick="createToast(t('please_login'),'red')">网络漫游</button>
                         <button id="smsForward" class="btn" data-i18n="sms_forward"
-                            onclick="createToast('请登录','red')">短信转发</button>
+                            onclick="createToast(t('please_login'),'red')">短信转发</button>
                         <button id="ScheduledTaskManagement" class="btn" data-i18n="scheduled_task"
-                            onclick="createToast('请登录','red')">定时任务</button>
+                            onclick="createToast(t('please_login'),'red')">定时任务</button>
                         <button id="APNManagement" data-i18n="apn_setting" class="btn"
-                            onclick="createToast('请登录','red')">APN设置</button>
-                        <button id="USBStatusManagement" class="btn" data-i18n="usb_status"
-                            onclick="createToast('请登录','red')">USB状态</button>
-                        <button id="OTA" class="btn" data-i18n="ota" onclick="createToast('请登录','red')">软件更新</button>
+                            onclick="createToast(t('please_login'),'red')">APN设置</button>
+                        <button id="USBStatusManagement" data-i18n="usb_status" class="btn"
+                            onclick="createToast(t('please_login'),'red')">USB状态</button>
+                        <button id="OTA" class="btn" data-i18n="ota"
+                            onclick="createToast(t('please_login'),'red')">软件更新</button>
 
                         <select class="select" style="display: none;" id="SLEEP_TIME" onchange="changeSleepTime(event)">
                             <option value="-1" data-i18n="sleep_never">从不休眠</option>
@@ -398,8 +402,14 @@
                 </div>
                 <div class="collapse" id="collapse_lkcell" style="overflow: visible;margin: 10px 0;margin-top: 20px;">
                     <div class="collapse_box">
-                        <p class="title"><i style="font-size: 12px;" data-i18n="cell_tip">🚀 注意，选错基站可能会导致信号不稳定/无信号等问题
-                                🚀</i></p>
+                        <div class="title">
+                            <div>
+                                <i style="font-size: 12px;" data-i18n="cell_tip">🚀 注意，选错基站可能会导致信号不稳定/无信号等问题
+                                    🚀</i>
+                                <br>
+                                <i style="font-size: 12px;" data-i18n="cell_tip1">提示：暂停刷新后可以依次锁定多个基站</i>
+                            </div>
+                        </div>
                         <div class="title" style="margin: 10px 0 ;margin-top: 20px;"><strong
                                 data-i18n="locked_cell">已锁基站</strong></div>
                         <table class="nice-table" id="LOCKED_CELL_FORM">
@@ -477,9 +487,9 @@
                     <div class="title" style="margin: 10px 0;">
                         <p style="font-size: 12px;margin: 0;">
                             <i>
-                                <span data-i18n="token_note_1">注：请在UFI-TOOLS_WEB</span><br>
-                                <span data-i18n="token_note_2">后台App内查看口令(默认为admin)</span><br>
-                                <span data-i18n="token_note_3">密码为设备的管理密码(默认在机器背面)</span><br>
+                                <span data-i18n="token_note_1">注：请填入口令和密码</span><br>
+                                <span data-i18n="token_note_2">第一个为UFI-TOOLS登录口令(默认为admin)</span><br>
+                                <span data-i18n="token_note_3">第二个为某兴后台的管理密码(在机器背面可以找到)</span><br>
                                 <span data-i18n="token_note_4">如果出现密码错误，请换一个登录方式</span>
                             </i>
                         </p>
@@ -492,10 +502,14 @@
                             <option value="1" data-i18n="login_method_1">登录方式1</option>
                             <option value="0" data-i18n="login_method_2">登录方式2</option>
                         </select>
+                        <div id="TOKEN_LABEL" style="align-self: start;margin-bottom: 10px;font-size: .85rem;"
+                            data-i18n="token_div_1">UFI 口令：</div>
                         <input name="backend_password" autocomplete="current-password" id="TOKEN" type="password"
                             data-i18n-placeholder="token_placeholder_token" placeholder="口令(UFI-TOOLS后台应用中查看)"
                             style="width: 100%;text-indent: .5em;margin:0 4px;margin-bottom: 10px;height: 30px;">
-                        <input name="web_password" autocomplete="new-password" id="tokenInput" type="password"
+                        <div style="align-self: start;margin-bottom: 10px;font-size: .85rem;" data-i18n="token_div_2">
+                            某兴后台密码：</div>
+                        <input name="web_password" autocomplete="new-password" id="PWDINPUT" type="password"
                             data-i18n-placeholder="token_placeholder_pwd" placeholder="官方后台的管理密码"
                             style="width: 100%;text-indent: .5em; margin:0 4px;margin-bottom: 20px;height: 30px;">
                     </form>
@@ -1187,15 +1201,6 @@
                             style="color: rgb(255, 162, 0);">请注意，安装插件可能会影响设备性能和稳定性，请谨慎选择。</span><br>
                         <span data-i18n="plugin_store_tip2">有些插件需要开启高级功能才可以使用。</span>
                     </div>
-                    <div class="sourceBox"
-                        style="display: flex;gap:10px;align-items: center;flex-wrap: wrap;margin-bottom: 10px;">
-                        <label for="pluginSourceSelect" style="font-size: .75rem;" data-i18n="plugin_source_label">插件源</label>
-                        <select id="pluginSourceSelect" style="flex:1;min-width: 0;padding:6px 8px;border-radius:6px;
-                                border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.2);color:inherit;">
-                        </select>
-                        <button id="pluginSourceManageBtn" class="btn" data-i18n="plugin_source_manage_btn"
-                            style="min-width: 68px;">管理</button>
-                    </div>
                     <div class="searchBox">
                         <input onkeyup="handlePluginStoreSearchInput(event)" style="padding-left: 6px;width: 100%;"
                             type="text" placeholder="搜索插件" id="pluginSearchInput"
@@ -1221,26 +1226,6 @@
                             <button id="plugin_store_next_page" data-i18n="next_page">下一页</button>
                         </div>
                         <button id="plugin_store_close_btn" data-i18n="close_btn">关闭</button>
-                    </div>
-                </div>
-            </div>
-            <!-- 插件源管理 -->
-            <div class="mask" id="pluginSourceManager" style="display: none">
-                <div class="modal"
-                    style="width: 92%;max-width: 520px;display:flex;flex-direction:column;gap:10px;overflow:hidden;">
-                    <div class="title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                        <span data-i18n="plugin_source_manager_title">插件源配置</span>
-                        <button id="pluginSourceManagerCloseBtn" data-i18n="close_btn">关闭</button>
-                    </div>
-                    <div class="content" id="pluginSourceManagerList"
-                        style="max-height: 420px;overflow-y: auto;display:flex;flex-direction:column;gap:10px;">
-                    </div>
-                    <div class="btn" style="display:flex;justify-content:space-between;gap:10px;">
-                        <button id="pluginSourceAddBtn" class="btn" data-i18n="plugin_source_add_btn">新增源</button>
-                        <div style="display:flex;gap:10px;">
-                            <button id="pluginSourceManagerCancel" data-i18n="cancel_btn">取消</button>
-                            <button id="pluginSourceSaveBtn" data-i18n="plugin_source_save_btn">保存</button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1317,27 +1302,43 @@
                                 <button onclick="event.preventDefault();setPort(true)">Accept</button>
                                 <button onclick="event.preventDefault();setPort(false)">Deny</button>
                             </div>
+                            <hr style="background-color: pink;" />
                             <div style="display: flex;gap: 10px;margin: 10px 0;">
-                                <button onclick="event.preventDefault();toggleTTYD(true)">Enable
+                                <button style="width: 100%;" onclick="event.preventDefault();toggleTTYD(true)">Enable
                                     TTYD</button>
-                                <button onclick="event.preventDefault();toggleTTYD(false)">Disable
+                                <button style="width: 100%;" onclick="event.preventDefault();toggleTTYD(false)">Disable
                                     TTYD</button>
                             </div>
                             <div style="display: flex;gap: 10px;margin: 10px 0;">
-                                <button onclick="event.preventDefault();toggleADBIP(true)">Enable ADB
+                                <button style="width: 100%;" onclick="event.preventDefault();toggleADBIP(true)">Enable
+                                    ADB
                                     5555</button>
-                                <button onclick="event.preventDefault();toggleADBIP(false)">Disable ADB
+                                <button style="width: 100%;" onclick="event.preventDefault();toggleADBIP(false)">Disable
+                                    ADB
                                     5555</button>
                             </div>
-                            <p>TTYD Port (default:1146)：<input name="ttyd_port" placeholder="1145" type="number"
-                                    id="TTYD_INPUT"
-                                    style="width: 100%;max-width: 100px;padding: 6px 10px;margin: 4px 0;">
+                            <div style="display: flex;gap: 10px;margin: 10px 0;">
+                                <button style="width: 100%;" onclick="event.preventDefault();toggleLogCat(true)">Enable
+                                    LogCat</button>
+                                <button style="width: 100%;"
+                                    onclick="event.preventDefault();toggleLogCat(false)">Disable LogCat
+                                </button>
+                            </div>
+                            <p style="display: flex;flex-wrap: nowrap;align-items: center;gap: 4px;">TTYD Port
+                                (default:1146)：<input name="ttyd_port" placeholder="1145" type="number" id="TTYD_INPUT"
+                                    style="text-align: center;width: 100%;;flex:1;padding: 6px 10px;margin: 4px 0;">
+                                <button type="submit" data-i18n="submit_btn">提交</button>
+                            </p>
+                            <p style="display: flex;flex-wrap: nowrap;align-items: center;gap: 4px;">Res Server：<input
+                                    name="resources_server" placeholder="https://pan.kanokano.cn" type="text"
+                                    id="RES_SERVER_INPUT"
+                                    style="text-align: center;width: 100%;flex:1;padding: 6px 10px;margin: 4px 0;">
+                                <button data-i18n="submit_btn" onclick="changeResServer(event)">提交</button>
                             </p>
                             <button onclick="event.preventDefault();resetTTYDPort()">RESET TTYD PORT</button>
                             <button class="btn" onclick="OP(event)">?</button>
                         </div>
                         <div class="btn" style="text-align: right;margin-top: 6px;">
-                            <button type="submit" data-i18n="submit_btn">提交</button>
                             <button type="button" data-i18n="close_btn" onclick="closeModal('#TTYDModal')">关闭</button>
                         </div>
                     </form>
@@ -1497,13 +1498,13 @@
             <!-- 更改密码模态框 -->
             <div class="mask" id="changePassModal" style="display: none">
                 <div class="modal">
-                    <div class="title" data-i18n="change_password_title">更改密码(中兴WEB密码)</div>
+                    <div class="title" data-i18n="change_password_title">更改密码(某兴WEB密码)</div>
                     <form onsubmit="handleChangePassword(event)" id="changePassForm">
                         <input type="text" autocomplete="username" name="username" value="admin" style="display: none;">
                         <div class="content" style="overflow-y: scroll; padding: 15px; width: 66vw; max-width: 400px;">
                             <div class="item" style="margin: 10px auto;">
                                 <label style="display: flex; align-items: center;">
-                                    <span data-i18n="old_password">旧的密码：</span>
+                                    <span style="flex: 1;" data-i18n="old_password">旧的密码：</span>
                                     <input style="flex: 1;padding: 4px 6px;width: 100%;" name="oldPassword"
                                         type="password" placeholder="旧密码" autocomplete="current-password"
                                         data-i18n-placeholder="old_password_placeholder">
@@ -1511,7 +1512,7 @@
                             </div>
                             <div class="item" style="margin: 10px auto;">
                                 <label style="display: flex; align-items: center;">
-                                    <span data-i18n="new_password">新的密码：</span>
+                                    <span style="flex: 1;" data-i18n="new_password">新的密码：</span>
                                     <input style="flex: 1;padding: 4px 6px;width: 100%;" name="newPassword"
                                         type="password" placeholder="新密码" autocomplete="new-password"
                                         data-i18n-placeholder="new_password_placeholder">
@@ -1519,7 +1520,7 @@
                             </div>
                             <div class="item" style="margin: 10px auto;">
                                 <label style="display: flex; align-items: center;">
-                                    <span data-i18n="confirm_password">确认密码：</span>
+                                    <span style="flex: 1;" data-i18n="confirm_password">确认密码：</span>
                                     <input style="flex: 1;padding: 4px 6px;width: 100%;" name="confirmPassword"
                                         type="password" placeholder="确认密码" autocomplete="new-password"
                                         data-i18n-placeholder="confirm_password_placeholder">
@@ -1529,6 +1530,39 @@
                         <div class="btn" style="text-align: right;">
                             <button type="submit" data-i18n="submit_btn">提交</button>
                             <button type="button" onclick="onCloseChangePassForm()" data-i18n="close_btn">关闭</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- 更改token模态框 -->
+            <div class="mask" id="changeTokenModal" style="display: none">
+                <div class="modal">
+                    <div class="title" data-i18n="change_token_title">更改登录口令</div>
+
+                    <div class="title" style="margin-top: 10px;font-size: .7rem;" data-i18n="token_change_notice">
+                        密码最短为8位，至少包含字母和数字</div>
+                    <form onsubmit="handleChangeToken(event)" id="changeTokenForm">
+                        <div class="content" style="overflow-y: scroll; padding: 15px; width: 66vw; max-width: 400px;">
+                            <div class="item" style="margin: 10px auto;">
+                                <label style="display: flex; align-items: center;">
+                                    <span style="flex: 1;" data-i18n="new_token">新的口令：</span>
+                                    <input style="flex: 1;padding: 4px 6px;width: 100%;" name="newToken" type="password"
+                                        placeholder="新口令" autocomplete="new-token"
+                                        data-i18n-placeholder="new_token_placeholder">
+                                </label>
+                            </div>
+                            <div class="item" style="margin: 10px auto;">
+                                <label style="display: flex; align-items: center;">
+                                    <span style="flex: 1;" data-i18n="confirm_token">确认口令：</span>
+                                    <input style="flex: 1;padding: 4px 6px;width: 100%;" name="confirmToken"
+                                        type="password" placeholder="确认口令" autocomplete="new-token"
+                                        data-i18n-placeholder="confirm_token_placeholder">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="btn" style="text-align: right;">
+                            <button type="submit" data-i18n="submit_btn">提交</button>
+                            <button type="button" onclick="onCloseChangeTokenForm()" data-i18n="close_btn">关闭</button>
                         </div>
                     </form>
                 </div>
@@ -1586,17 +1620,17 @@
                 </div>
             </div>
             <!-- usb状态 -->
-            <div class="mask" id="USBStatusModal" style="display: none;">
-                <div class="modal" style="width: 90%; max-width: 520px;">
-                    <div class="title" data-i18n="usb_status">USB状态</div>
-                    <div class="title" style="font-size: 12px;margin: 10px 0"><i
-                            data-i18n="usb_status_notice">仅展示机器Type-C口连接的设备列表，数据仅供参考</i></div>
-                    <div class="content"
-                        style="font-size: .7rem;overflow-y: auto; padding: 10px 0;margin-bottom: 10px; width: 66vw; max-width: 500px;">
-                    </div>
-                    <div class="btn" style="text-align: right;">
-                        <button type="button" onclick="closeUSBStatusModal('#USBStatusModal')" data-i18n="close_btn">关闭</button>
-                    </div>
+            <div class="modal" id="USBStatusModal" style="display: none;">
+                <div class="title" data-i18n="usb_status">USB状态</div>
+                <div class="title" style="font-size: 12px;margin: 10px 0"><i
+                        data-i18n="usb_status_notice">仅展示机器Type-C口连接的设备列表，数据仅供参考</i></div>
+                <div class="content"
+                    style="font-size: .7rem;overflow-y: auto; padding: 10px 0;margin-bottom: 10px;; width: 66vw; max-width: 500px;">
+                </div>
+
+                <div class="btn" style="text-align: right;">
+                    <button type="button" onclick="closeUSBStatusModal('#USBStatusModal')"
+                        data-i18n="close_btn">关闭</button>
                 </div>
             </div>
             <!-- 版本更新模态框 -->
@@ -1617,6 +1651,8 @@
                         <div class="speedtest" style="font-size: 12px;" id="ChangelogTextContent"></div>
                     </div>
                     <div class="btn" style="text-align: right;">
+                        <button id="doUpdate" data-i18n="btn_update">一键更新</button>
+                        <button id="downloadAPK" data-i18n="btn_download">下载安装包</button>
                         <button id="closeUpdateBtn" type="button" onclick="closeModal('#updateSoftwareModal')"
                             data-i18n="close_btn">关闭</button>
                     </div>
@@ -1929,10 +1965,48 @@
                 </div>
             </div>
 
+            <!-- ❤️ -->
+            <div class="mask" id="payModal" style="display: none" onclick="handleClosePayModal(event)">
+                <div class="modal">
+                    <div class="title" style="width: 100%;display: flex;justify-content:space-between;"><span
+                            data-i18n="pay_title">打赏作者/群组链接</span>
+                        <button type="button" onclick="onClosePayModal()" data-i18n="pay_btn_dismiss"
+                            style="margin-right: 15px;">不再显示</button>
+                    </div>
+                    <div class="title"
+                        style="display: flex;align-items: center;margin-top: 10px;font-size: 12px;margin-bottom: 10px;">
+                        <div>
+                            <p style="margin: 0; font-style: italic;" data-i18n="pay_tip_1">开发不易，打赏随意～</p>
+                            <p style="margin: 0; font-style: italic;" data-i18n="pay_tip_2">长按赞赏码可保存为图片</p>
+                        </div>
+                    </div>
+                    <div class="title" style="font-size: 14px;display: flex;flex-direction: column;">
+                        <div style="display: flex;flex-wrap: wrap;gap: 10px;justify-content: center;">
+                            <button><a href="https://t.me/ufi_tools_chat" target="_blank" data-i18n="tg_group">点我加入TG群组:
+                                    @ufi_tools_chat</a></button>
+                            <button><a href="https://t.me/ufi_tools" target="_blank" data-i18n="tg_channel">TG频道:
+                                    @ufi_tools</a></button>
+                        </div>
+                        <button onclick="copyText(event)"><a
+                                href="https://link.trustwallet.com/send?coin=60&address=0xdf0503f26D83214d1D4895fC13E8913f52F47607&token_id=0xdAC17F958D2ee523a2206206994597C13D831ec7">USDT</a>
+                            0xdf0503f26D83214d1D4895fC13E8913f52F47607</button>
+
+                    </div>
+                    <div class="donate_content"
+                        style="display: flex; flex-direction: row; justify-content: space-between; padding: 15px; width: 66vw; max-width: 400px; flex-wrap: wrap;">
+                        <img src="https://api.kanokano.cn/pay/zsm.png"
+                            style="width: 48%; height: auto; border-radius: 20px;"
+                            onerror="this.onerror=null; this.src='/img/zsm.png'" alt="">
+                        <img src="/img/qq_group.png" style="width: 48%; height: auto; border-radius: 20px;"
+                            onerror="this.onerror=null; this.src='/img/zsm.webp'" alt="">
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="footer">
-        <p>Made by <a href="https://github.com/kanoqwq/UFI-TOOLS" target="_blank">MiniKano</a> with love ❤️</p>
+        <p>Made by <a href="https://github.com/kanoqwq/UFI-TOOLS" target="_blank">MiniKano</a> with love ❤️&nbsp;<a
+                href="javascript:;" onclick="showModal('#payModal')" data-i18n="pay_title">打赏作者</a></p>
     </div>
 
     <div class="toolbar">
@@ -1955,10 +2029,7 @@
     <script src="/script/utils.js"></script>
     <script src="/script/theme.js"></script>
     <script src="/script/charts.js"></script>
-    <script src="/script/plugin-source-helper.js"></script>
     <script src="/script/main.js"></script>
-    <script src="/script/plugin-store-safety.js"></script>
-    <script src="/script/plugin-store-download.js"></script>
 </body>
 
 </html>

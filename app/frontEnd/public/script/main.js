@@ -139,10 +139,13 @@ const needToken = async (shouldThrowError = false, fetchMaxRetries = 3) => {
     }
 
     let tkInput = document.querySelector('#TOKEN')
+    let tkLabel = document.querySelector("#TOKEN_LABEL")
     if (isNeedToken) {
         tkInput && (tkInput.style.display = "")
+        tkLabel && (tkLabel.style.display = "")
     } else {
         tkInput && (tkInput.style.display = "none")
+        tkLabel && (tkLabel.style.display = "none")
     }
 };
 
@@ -453,6 +456,7 @@ function main_func() {
         initLANSettings()
         initSmsForwardModal()
         initChangePassData()
+        initChangeTokenData()
         adbQuery()
         loadTitle()
         initUpdateSoftware()
@@ -476,9 +480,12 @@ function main_func() {
         initATBtn()
         initAPNManagement()
         initCellularSpeedTestBtn()
+        initUSBStatusManagementBtn()
         initSleepTime()
         initAdvanceTools()
         QOSRDPCommand("AT+CGEQOSRDP=1")
+        initTerms()
+        initCheckWeakToken()
         initTTYD()
     }
 
@@ -512,10 +519,10 @@ function main_func() {
             toastTimer = createTimer()
             await needToken()
             toastTimer && clearTimeout(toastTimer)
-            let tkInput = document.querySelector('#tokenInput')
             let tokenInput = document.querySelector('#TOKEN')
-            let password = tkInput && (tkInput.value)
+            let pwdInput = document.querySelector('#PWDINPUT')
             let token = tokenInput && (tokenInput.value)
+            let password = pwdInput && (pwdInput.value)
             if (!password || !password?.trim()) return createToast(t('toast_please_input_pwd'), 'red')
             KANO_PASSWORD = password.trim()
             if (isNeedToken) {
@@ -578,6 +585,7 @@ function main_func() {
             localStorage.setItem('kano_sms_token', SHA256(token.trim()).toLowerCase())
             closeModal('#tokenModal')
             initRenderMethod()
+            initMessage()
         }
         catch (e) {
             toastTimer && clearTimeout(toastTimer)
@@ -624,7 +632,7 @@ function main_func() {
                 createToast(t('client_mgmt_fetch_error') + res.error, 'red')
                 return null
             }
-            return res.messages
+            return res.messages ? res.messages : []
         } catch {
             // out()
             createToast(t('client_mgmt_fetch_error') + res.error, 'red')
@@ -1598,6 +1606,7 @@ function main_func() {
                             //切网
                             createToast(t("toast_changing"))
                             await changeNetwork({ target: { value: net.value } }, true)
+                            await new Promise(resolve => setTimeout(resolve, 800))
                             //切回来
                             await changeNetwork({ target: { value: curValue } })
                         }
@@ -1688,13 +1697,15 @@ function main_func() {
     }
 
     const toggleCellInfoRefresh = (e) => {
-        const btn = e?.currentTarget?.closest?.('#lkCellRefreshBtn')
-            || e?.target?.closest?.('#lkCellRefreshBtn')
-            || document.querySelector('#lkCellRefreshBtn')
-        if (!btn) return
-        const data = btn.dataset.toggle
-        if (data != "1") toggleLkcellOpen(true)
-        else toggleLkcellOpen(false)
+        const target = e.target
+        if (target) {
+            const data = e.target.dataset.toggle
+            if (data != "1") {
+                toggleLkcellOpen(true)
+            } else {
+                toggleLkcellOpen(false)
+            }
+        }
     }
 
     let onSelectCellRow = (pci, earfcn) => {
@@ -1748,7 +1759,7 @@ function main_func() {
                 pciEl.value = ''
                 earfcnEl.value = ''
                 createToast(t('toast_set_cell_success'), 'green')
-                //刷新已锁基站列表（停止刷新时方便锁定多基站）
+                //刷新基站列表
                 initCellInfo(true)
             } else {
                 throw t('toast_set_cell_failed')
@@ -1777,11 +1788,11 @@ function main_func() {
 
             if (res.result == 'success') {
                 createToast(t('toast_unlock_cell_success'), 'green')
+                //刷新基站列表
                 initCellInfo(true)
             } else {
                 throw t('toast_unlock_cell_failed')
             }
-
         } catch {
             createToast(t('toast_unlock_cell_failed'), 'red')
         }
@@ -2328,7 +2339,12 @@ function main_func() {
         }
     }
 
-    document.querySelector('#tokenInput').addEventListener('keydown', (event) => {
+    document.querySelector('#PWDINPUT').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            onTokenConfirm()
+        }
+    });
+    document.querySelector('#TOKEN').addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             onTokenConfirm()
         }
@@ -2854,6 +2870,7 @@ function main_func() {
         click_count_ttyd++
         if (click_count_ttyd == 4) {
             // 启用ttyd弹窗
+            initResServer()
             showModal('#TTYDModal')
         }
         ttyd_timer && clearInterval(ttyd_timer)
@@ -2873,10 +2890,40 @@ function main_func() {
         // 保存ttyd port
         localStorage.setItem('ttyd_port', ttyd_port)
         createToast(t('toast_save_success'), 'green')
-        closeModal('#TTYDModal')
         initTTYD()
     }
 
+    let changeResServer = async (e) => {
+        e.preventDefault()
+        const RES_SERVER_INPUT = document.querySelector('#RES_SERVER_INPUT')
+        if (!RES_SERVER_INPUT) return
+        const url = RES_SERVER_INPUT.value.trim()
+        if (!url || url.length == 0) return createToast("Please input res server!", 'red')
+        const res = await (await fetchWithTimeout(`${KANO_baseURL}/set_res_server`, {
+            method: 'POST',
+            headers: common_headers,
+            body: JSON.stringify({ res_server: url })
+        }, 5000)).json()
+        if (res.result != "success") {
+            return createToast(t('toast_save_failed'), 'red')
+        }
+        createToast(t('toast_save_success'), 'green')
+        closeModal('#resServerModal')
+    }
+
+    let initResServer = async () => {
+        const RES_SERVER_INPUT = document.querySelector('#RES_SERVER_INPUT')
+        if (!RES_SERVER_INPUT) return
+        try {
+            const { res_server } = await (await fetchWithTimeout(`${KANO_baseURL}/get_res_server`, {
+                method: 'GET',
+                headers: common_headers
+            })).json()
+            RES_SERVER_INPUT.value = res_server || ''
+        } catch {
+            // no handle
+        }
+    }
 
     function parseCGEQOSRDP(input) {
         const match = input.match(/\+CGEQOSRDP:\s*(.+?)\s*OK/);
@@ -2924,14 +2971,30 @@ function main_func() {
             //单卡用户默认0槽位
             sim_slot = 0
         }
+
+        // For F50Pro
+        if (UFI_DATA && UFI_DATA.model == "MU3356" && (sim_slot == '0' || sim_slot == '1')) {
+            sim_slot = sim_slot == 1 ? 0 : 1
+        }
+
         // V50 内置卡1(移动)slot=0 内置卡2(电信)slot=1 内置卡3(联通)slot=2 外置卡slot=11 外置卡 slot需要设置为0 联通内置卡slot设置为1
         // For V50
         if (sim_slot == "11") {
-            sim_slot = 0
+            //可恶的F50Pro两个卡槽居然是反过来的
+            if (UFI_DATA && UFI_DATA.model == "MU3356") {
+                sim_slot = 1
+            } else {
+                sim_slot = 0
+            }
         }
         if (sim_slot == "2") {
             sim_slot = 1
         }
+        // For F50Pro
+        if (sim_slot == "12") {
+            sim_slot = 0
+        }
+
         let res = await executeATCommand(cmd, sim_slot)
         //如果是单卡用户，0槽位又获取不到数据，那就尝试1槽位
         if (res.result && res.result.includes('ERROR')) {
@@ -3229,9 +3292,6 @@ function main_func() {
         } catch {
             createToast(t('toast_login_failed_check_network_and_pwd'), 'red')
             closeModal('#changePassModal')
-            setTimeout(() => {
-                out()
-            }, 310);
         }
     }
 
@@ -3239,6 +3299,86 @@ function main_func() {
         const form = document.querySelector("#changePassForm")
         form && form.reset()
         closeModal("#changePassModal")
+    }
+
+
+    //更改口令
+    initChangeTokenData = async () => {
+        const el = document.querySelector("#CHANGETOKEN")
+        if (!(await initRequestData()) || !el) {
+            el.onclick = () => createToast(t('toast_please_login'), 'red')
+            el.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+            return null
+        }
+        el.style.backgroundColor = ''
+        el.onclick = async () => {
+            showModal('#changeTokenModal')
+        }
+    }
+    initChangeTokenData()
+
+    //更改口令
+    const handleChangeToken = async (e) => {
+        e.preventDefault()
+        const form = e.target
+        const formData = new FormData(form);
+        const newToken = formData.get('newToken')
+        const confirmToken = formData.get('confirmToken')
+        const exp = /^(?=.*[a-zA-Z])(?=.*\d).{8,128}$/
+        if (!newToken || newToken.trim() == '') return createToast(t('toast_please_input_new_token'), 'red')
+        if (!confirmToken || confirmToken.trim() == '') return createToast(t('toast_please_input_new_conform_token'), 'red')
+        if (newToken != confirmToken) return createToast(t('toast_token_not_eqal'), 'red')
+        if (newToken.trim().length < 8) return createToast(t('toast_token_too_short'), 'red')
+        if (!exp.test(newToken)) return createToast(t('toast_token_invalid'), 'red')
+        try {
+            try {
+                const res = await (await fetchWithTimeout(`${KANO_baseURL}/set_token`, {
+                    method: 'POST',
+                    headers: common_headers,
+                    body: JSON.stringify({
+                        token: newToken.trim()
+                    })
+                })).json()
+                if (res && res.result == 'success') {
+                    createToast(t('toast_change_success'), 'green')
+                    const new_token = SHA256(newToken.trim()).toLowerCase()
+                    KANO_TOKEN = new_token
+                    common_headers.authorization = KANO_TOKEN
+                    localStorage.setItem('kano_sms_token', new_token)
+                    form.reset()
+                    const md = createModal({
+                        name: "kano_token_confirm",
+                        noBlur: true,
+                        isMask: true,
+                        title: t('remind_your_token'),
+                        contentStyle: "font-size:12px",
+                        onClose: () => {
+                            return true
+                        },
+                        onConfirm: () => {
+                            return true
+                        },
+                        content: `<div><p class="title" style="margin:6px 0">${t('remind_your_token_text')}</p><h1 onclick="copyText(event)" style="text-align:center">${newToken}</h1></div>`
+                    })
+                    closeModal('#changeTokenModal', 300, () => {
+                        showModal(md.id)
+                    })
+                } else {
+                    throw t('toast_change_failed')
+                }
+            } catch {
+                createToast(t('toast_change_failed'), 'red')
+            }
+        } catch {
+            createToast(t('toast_login_failed_check_network_and_pwd'), 'red')
+            closeModal('#changeTokenModal')
+        }
+    }
+
+    const onCloseChangeTokenForm = () => {
+        const form = document.querySelector("#changeTokenForm")
+        form && form.reset()
+        closeModal("#changeTokenModal")
     }
 
     //sim卡切换
@@ -3520,6 +3660,24 @@ function main_func() {
         }
     }
 
+    //打赏模态框设置
+    const payModalState = localStorage.getItem('hidePayAndGroupModal') || false
+    !payModalState && window.addEventListener('load', () => {
+        setTimeout(() => {
+            showModal('#payModal')
+        }, 300);
+    })
+
+    const onClosePayModal = () => {
+        closeModal('#payModal')
+        localStorage.setItem('hidePayAndGroupModal', 'true')
+    }
+
+    const handleClosePayModal = (e) => {
+        if (e.target.id != 'payModal') return
+        onClosePayModal()
+    }
+
     //展开收起
     // 配置观察器_菜单
     (() => {
@@ -3551,7 +3709,6 @@ function main_func() {
     // 配置观察器_锁频
     collapseGen("#collapse_lkband_btn", "#collapse_lkband", "collapse_lkband")
 
-    //展开收起
     // 配置观察器_锁基站
     collapseGen("#collapse_lkcell_btn", "#collapse_lkcell", "collapse_lkcell", (isOpen) => {
         if (isOpen == 'open') {
@@ -3560,6 +3717,8 @@ function main_func() {
             toggleLkcellOpen(false)
         }
     })
+
+    //展开收起
     const collapse_lkcell_stor = localStorage.getItem('collapse_lkcell') || 'open'
     collapse_lkcell_stor == 'open' ? toggleLkcellOpen(true) : toggleLkcellOpen(false)
 
@@ -3721,7 +3880,7 @@ function main_func() {
         const changelogTextContent = document.querySelector('#ChangelogTextContent')
         const OTATextContent = document.querySelector('#OTATextContent')
         OTATextContent.innerHTML = t('checking_update')
-        changelogTextContent.innerHTML = ''
+        !silent && (changelogTextContent.innerHTML = '')
         !silent && showModal('#updateSoftwareModal')
 
         try {
@@ -3883,7 +4042,48 @@ function main_func() {
     setTimeout(() => {
         checkUpdateAction(true).then((res) => {
             if (res) {
-                createToast(`${t('found')} ${res.isForceUpdate ? t('sticky_update') : t('mew_update')}：${res.text}`)
+                const { el, close } = createFixedToast('kano_new_ota', `
+                <div style="pointer-events:all;width:80vw;max-width:300px;">
+                <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
+                <div class="title" id="force_update_title" style="margin-top:10px;font-size:.6rem"><i data-i18n="force_update_desc">${t("force_update_desc")}</i></div>
+                <p>${`${t('found')} ${res.isForceUpdate ? t('sticky_update') : t('new_update')}：${res.text}`}</p>
+                <div style="display:flex;gap:10px">
+                    <button id="confirm_kano_new_ota_toast_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="btn_update">${t("btn_update")}</button>
+                    <button id="close_kano_new_ota_toast_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="cancel_btn">${t("cancel_btn")}(8)</button>
+                </div>
+                </div>
+                `, 'red')
+                const confirmBtn = el.querySelector("#confirm_kano_new_ota_toast_btn")
+                const closeBtn = el.querySelector("#close_kano_new_ota_toast_btn")
+                const forceUpdateTitle = el.querySelector("#force_update_title")
+
+                if (forceUpdateTitle) {
+                    forceUpdateTitle.style.display = res.isForceUpdate ? "" : "none"
+                }
+
+                if (confirmBtn) {
+                    let debounceTimer = null
+                    confirmBtn.onclick = () => {
+                        close()
+                        clearTimeout(debounceTimer)
+                        debounceTimer = setTimeout(() => {
+                            checkUpdateAction()
+                        }, 500);
+                    }
+                }
+                if (closeBtn) {
+                    let times = 7
+                    let interval = setInterval(() => {
+                        closeBtn.textContent = `${t("cancel_btn")}(${times--})`
+                        if (times < 0) {
+                            clearInterval(interval)
+                            close()
+                        }
+                    }, 1000);
+                    closeBtn.onclick = () => {
+                        close()
+                    }
+                }
             }
         })
     }, 100);
@@ -5471,465 +5671,163 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         const id = e.target.id
         if (classList && classList.includes('mask')) {
             if (id) {
-                closeModal(`#${id}`)
+                closeModal(`#${id}`);
                 setTimeout(() => {
                     showModal('#PluginModal')
-                }, 200)
+                }, 200);
             }
         }
     }
 
-    const pluginStoreLoadingMarkup = `
+    const plugin_store = document.querySelector('#plugin_store_btn')
+    plugin_store.onclick = (e) => {
+        //隐藏插件功能模态框
+        const pluginModal = document.querySelector('#PluginModal')
+        pluginModal.style.display = 'none'
+
+        const plugin_store_close_btn = document.querySelector('#plugin_store_close_btn')
+        plugin_store_close_btn.onclick = () => {
+            closeModal('#plugin_store')
+            setTimeout(() => {
+                showModal('#PluginModal')
+            }, 200);
+        }
+
+        showModal('#plugin_store')
+        const items = document.querySelector('#plugin_store .plugin-items')
+        //loading
+        items.innerHTML = `
         <li style="padding-top: 15px;overflow:hidden">
             <strong class="green" style="text-align: center;margin: 10px auto;margin-top: 0; display: flex;flex-direction: column;padding: 40px;">
                 <span style="font-size: 50px;" class="spin">🌀</span>
                 <span style="font-size: 16px;padding-top: 10px;">loading...</span>
             </strong>
         </li>
-    `
-
-    let pluginSources = []
-    let activePluginSourceId = null
-    let pluginSourceDraft = []
-
-    const generatePluginSourceId = () => {
-        if (globalThis.crypto?.randomUUID) {
-            return crypto.randomUUID()
-        }
-        return `src_${Date.now().toString(16)}${Math.floor(Math.random() * 1e6).toString(16)}`
-    }
-
-    const fallbackPluginSources = () => ([])
-
-    const fetchPluginSources = async () => {
-        try {
-            const response = await fetchWithTimeout(`${KANO_baseURL}/plugin_sources`)
-            const data = await response.json()
-            const sources = Array.isArray(data.sources) ? data.sources : []
-            pluginSources = sources.length ? sources : fallbackPluginSources()
-        } catch (error) {
-            console.error(error)
-            if (!pluginSources.length) {
-                pluginSources = fallbackPluginSources()
-            }
-            createToast(t('plugin_source_load_failed'), 'red')
-        }
-        if (!pluginSources.length) {
-            pluginSources = fallbackPluginSources()
-        }
-        if (!activePluginSourceId || !pluginSources.some(src => src.id === activePluginSourceId)) {
-            activePluginSourceId = pluginSources[0]?.id
-        }
-    }
-
-    const updatePluginSourceSelect = () => {
-        const select = document.querySelector('#pluginSourceSelect')
-        if (!select) return
-        select.innerHTML = ''
-        pluginSources.forEach(source => {
-            const option = document.createElement('option')
-            option.value = source.id
-            option.textContent = source.name || source.id
-            select.appendChild(option)
-        })
-        if (!pluginSources.length) {
-            select.disabled = true
-        } else {
-            select.disabled = false
-            if (activePluginSourceId) {
-                select.value = activePluginSourceId
-            }
-        }
-    }
-
-    const collectSourcesFromManager = (allowIncomplete = false) => {
-        const rows = Array.from(document.querySelectorAll('#pluginSourceManagerList .plugin-source-row'))
-        const sources = []
-        rows.forEach(row => {
-            const builtIn = row.dataset.builtin === 'true'
-            const entry = {
-                id: row.dataset.id || generatePluginSourceId(),
-                builtIn,
-                name: '',
-                downloadUrl: '',
-                password: ''
-            }
-            row.querySelectorAll('input[data-field]').forEach(input => {
-                entry[input.dataset.field] = input.value.trim()
-            })
-            if (!builtIn && !allowIncomplete) {
-                if (!entry.downloadUrl) {
-                    throw new Error('invalid')
-                }
-            }
-            sources.push(entry)
-        })
-        return sources
-    }
-
-    const renderPluginSourceManager = () => {
-        const list = document.querySelector('#pluginSourceManagerList')
-        if (!list) return
-        list.innerHTML = ''
-
-        pluginSourceDraft.forEach(source => {
-            const row = document.createElement('div')
-            row.className = 'plugin-source-row'
-            row.dataset.id = source.id
-            row.dataset.builtin = source.builtIn ? 'true' : 'false'
-            row.style = 'border:1px solid rgba(255,255,255,0.12);padding:10px;border-radius:10px;display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,0.25);'
-
-            const header = document.createElement('div')
-            header.style = 'display:flex;align-items:center;justify-content:space-between;gap:10px;'
-
-            const title = document.createElement('span')
-            title.style = 'font-weight:600;font-size:.85rem;'
-            title.textContent = source.name || t('plugin_source_name')
-            header.appendChild(title)
-
-            if (source.builtIn) {
-                const badge = document.createElement('span')
-                badge.style = 'font-size:.65rem;color:var(--green-color,#4caf50);'
-                badge.textContent = t('plugin_source_builtin')
-                header.appendChild(badge)
-            } else {
-                const removeBtn = document.createElement('button')
-                removeBtn.className = 'btn'
-                removeBtn.style = 'min-width:60px;'
-                removeBtn.textContent = t('plugin_source_delete_btn')
-                removeBtn.onclick = () => {
-                    try {
-                        pluginSourceDraft = collectSourcesFromManager(true)
-                    } catch { }
-                    pluginSourceDraft = pluginSourceDraft.filter(item => item.id !== source.id)
-                    renderPluginSourceManager()
-                }
-                header.appendChild(removeBtn)
-            }
-
-            row.appendChild(header)
-
-            // 名称（自定义源可编辑，内置源仅展示标题）
-            if (!source.builtIn) {
-                const nameWrapper = document.createElement('label')
-                nameWrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
-                const nameLabel = document.createElement('span')
-                nameLabel.textContent = t('plugin_source_name')
-                const nameInput = document.createElement('input')
-                nameInput.dataset.field = 'name'
-                nameInput.value = source.name || ''
-                nameInput.placeholder = t('plugin_source_name_placeholder')
-                nameInput.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
-                nameWrapper.appendChild(nameLabel)
-                nameWrapper.appendChild(nameInput)
-                row.appendChild(nameWrapper)
-            }
-
-            const downloadWrapper = document.createElement('label')
-            downloadWrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
-            const downloadLabel = document.createElement('span')
-            downloadLabel.textContent = t('plugin_source_download_url')
-            const downloadInput = document.createElement('input')
-            downloadInput.dataset.field = 'downloadUrl'
-            downloadInput.value = source.downloadUrl || ''
-            downloadInput.placeholder = t('plugin_source_download_placeholder')
-            downloadInput.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
-            downloadWrapper.appendChild(downloadLabel)
-            downloadWrapper.appendChild(downloadInput)
-            row.appendChild(downloadWrapper)
-
-            const passwordWrapper = document.createElement('label')
-            passwordWrapper.style = 'display:flex;flex-direction:column;gap:4px;font-size:.72rem;'
-            const passwordLabel = document.createElement('span')
-            passwordLabel.textContent = t('plugin_source_password')
-            const passwordInput = document.createElement('input')
-            passwordInput.dataset.field = 'password'
-            passwordInput.value = source.password || ''
-            passwordInput.placeholder = t('plugin_source_password_placeholder')
-            passwordInput.style = 'padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.2);color:inherit;'
-            passwordWrapper.appendChild(passwordLabel)
-            passwordWrapper.appendChild(passwordInput)
-            row.appendChild(passwordWrapper)
-
-            list.appendChild(row)
-        })
-    }
-
-    const savePluginSourceSettings = async () => {
-        let sources
-        try {
-            sources = collectSourcesFromManager(false)
-        } catch {
-            createToast(t('plugin_source_required'), 'red')
-            return
-        }
-        const payloadSources = sources.map(source => ({
-            ...source,
-            password: source.password || ''
-        }))
-        try {
-            const res = await fetchWithTimeout(`${KANO_baseURL}/plugin_sources`, {
-                method: 'POST',
-                headers: {
-                    ...common_headers,
-                    'content-type': 'application/json'
-                },
-                body: JSON.stringify({ sources: payloadSources })
-            })
-            const data = await res.json()
-            if (data.result === 'success' && Array.isArray(data.sources)) {
-                pluginSources = data.sources
-                if (!pluginSources.some(src => src.id === activePluginSourceId)) {
-                    activePluginSourceId = pluginSources[0]?.id
-                }
-                updatePluginSourceSelect()
-                closeModal('#pluginSourceManager')
-                createToast(t('plugin_source_save_success'), 'green')
-                await loadPluginsForSource(activePluginSourceId, { showToastOnError: false })
-            } else {
-                throw new Error('save_failed')
-            }
-        } catch (error) {
-            console.error(error)
-            createToast(t('plugin_source_save_failed'), 'red')
-        }
-    }
-
-    const openPluginSourceManager = () => {
-        pluginSourceDraft = pluginSources.map(source => ({ ...source }))
-        renderPluginSourceManager()
-
-        const addBtn = document.querySelector('#pluginSourceAddBtn')
-        if (addBtn) {
-            addBtn.onclick = () => {
-                try {
-                    pluginSourceDraft = collectSourcesFromManager(true)
-                } catch { }
-                pluginSourceDraft.push({
-                    id: generatePluginSourceId(),
-                    name: '',
-                    apiUrl: '',
-                    path: '',
-                    downloadUrl: '',
-                    password: '',
-                    builtIn: false
-                })
-                renderPluginSourceManager()
-            }
-        }
-
-        const saveBtn = document.querySelector('#pluginSourceSaveBtn')
-        if (saveBtn) {
-            saveBtn.onclick = () => savePluginSourceSettings()
-        }
-
-        const closeBtn = document.querySelector('#pluginSourceManagerCloseBtn')
-        if (closeBtn) {
-            closeBtn.onclick = () => closeModal('#pluginSourceManager')
-        }
-
-        const cancelBtn = document.querySelector('#pluginSourceManagerCancel')
-        if (cancelBtn) {
-            cancelBtn.onclick = () => closeModal('#pluginSourceManager')
-        }
-
-        showModal('#pluginSourceManager')
-    }
-
-    const setupPluginStoreView = (content, downloadUrl) => {
-        const items = document.querySelector('#plugin_store .plugin-items')
+        `
         const total = document.querySelector('#plugin_store .total')
-        const cur_page_el = document.querySelector('#plugin_store_cur_page')
-        const total_page_el = document.querySelector('#plugin_store_total_page')
-        const nextPageBtn = document.querySelector('#plugin_store_next_page')
-        const prevPageBtn = document.querySelector('#plugin_store_prev_page')
-        const pluginSearchBtn = document.querySelector('#pluginSearchBtn')
-        const pluginSearchResetBtn = document.querySelector('#pluginSearchResetBtn')
-        const pluginSearchInput = document.querySelector('#pluginSearchInput')
+        //加载插件
+        fetchWithTimeout(`${KANO_baseURL}/plugins_store`)
+            .then(res => res.json())
+            .then(({ res, download_url }) => {
+                const data = res.data || {}
+                items.innerHTML = ''
+                if (data && data.content && data.content.length > 0) {
+                    total.innerHTML = `${t('plugin_modal_num')}: ${data.content.length}`
+                    //分页
+                    const pageSize = 10
+                    const totalPages = Math.ceil(data.content.length / pageSize)
+                    let pageNum = 0
+                    const cur_page_el = document.querySelector('#plugin_store_cur_page')
+                    const total_page_el = document.querySelector('#plugin_store_total_page')
+                    cur_page_el.innerHTML = pageNum + 1
+                    total_page_el.innerHTML = totalPages
+                    renderPluginItems(data.content.slice(pageNum * pageSize, pageNum * pageSize + pageSize), download_url)
 
-        const list = Array.isArray(content) ? content : []
+                    //下一页
+                    const nextPageBtn = document.querySelector('#plugin_store_next_page')
+                    nextPageBtn.style.backgroundColor = totalPages <= 1 ? 'var(--dark-btn-disabled-color)' : ''
+                    nextPageBtn.onclick = () => {
+                        pageNum++
+                        if (pageNum >= totalPages - 1) {
+                            nextPageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                        } else {
+                            nextPageBtn.style.backgroundColor = ''
+                        }
+                        if (pageNum >= totalPages) {
+                            pageNum = totalPages - 1
+                            return
+                        }
+                        prevageBtn.style.backgroundColor = ''
+                        cur_page_el.innerHTML = pageNum + 1
+                        total_page_el.innerHTML = totalPages
+                        renderPluginItems(data.content.slice(pageNum * pageSize, pageNum * pageSize + pageSize), download_url)
+                    }
 
-        if (!list.length) {
-            items.innerHTML = `<li style="padding:10px">${t('no_plugins_found')}</li>`
-            total.innerHTML = `${t('plugin_modal_num')}: 0`
-            cur_page_el.innerHTML = 0
-            total_page_el.innerHTML = 0
-            if (nextPageBtn) nextPageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-            if (prevPageBtn) prevPageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-            if (pluginSearchBtn) pluginSearchBtn.onclick = null
-            if (pluginSearchResetBtn) pluginSearchResetBtn.onclick = null
-            return
-        }
+                    //上一页
+                    const prevageBtn = document.querySelector('#plugin_store_prev_page')
+                    prevageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                    prevageBtn.onclick = () => {
+                        pageNum--
+                        if (pageNum <= 0) {
+                            prevageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                        } else {
+                            prevageBtn.style.backgroundColor = ''
+                        }
+                        if (pageNum < 0) {
+                            pageNum = 0
+                            return
+                        }
+                        nextPageBtn.style.backgroundColor = ''
+                        cur_page_el.innerHTML = pageNum + 1
+                        total_page_el.innerHTML = totalPages
+                        renderPluginItems(data.content.slice(pageNum * pageSize, pageNum * pageSize + pageSize), download_url)
+                    }
 
-        const pageSize = 10
-        const totalPages = Math.max(1, Math.ceil(list.length / pageSize))
-        let pageNum = 0
+                    //搜索插件
+                    const pluginSearchBtn = document.querySelector('#pluginSearchBtn')
+                    pluginSearchBtn.onclick = () => {
+                        const pluginSearchInput = document.querySelector('#pluginSearchInput')
+                        const keyword = pluginSearchInput.value.trim()
 
-        const updateButtonState = () => {
-            if (nextPageBtn) {
-                nextPageBtn.style.backgroundColor = pageNum >= totalPages - 1 ? 'var(--dark-btn-disabled-color)' : ''
-            }
-            if (prevPageBtn) {
-                prevPageBtn.style.backgroundColor = pageNum <= 0 ? 'var(--dark-btn-disabled-color)' : ''
-            }
-        }
+                        const scrollToFirstPage = () => {
+                            pageNum = 0
+                            prevageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                            nextPageBtn.style.backgroundColor = ''
+                            cur_page_el.innerHTML = pageNum + 1
+                            renderPluginItems(data.content.slice(pageNum * pageSize, pageNum * pageSize + pageSize), download_url)
+                            scrollToElement('#plugin_store .plugin-title', data.content[0].name)
+                        }
 
-        const renderPage = () => {
-            cur_page_el.innerHTML = pageNum + 1
-            total_page_el.innerHTML = totalPages
-            const slice = list.slice(pageNum * pageSize, pageNum * pageSize + pageSize)
-            renderPluginItems(slice, downloadUrl)
-        }
+                        if (!keyword || keyword == '') {
+                            return scrollToFirstPage()
+                        }
 
-        total.innerHTML = `${t('plugin_modal_num')}: ${list.length}`
-        renderPage()
-        updateButtonState()
+                        //寻找存在的页面页码并跳转
 
-        if (nextPageBtn) {
-            nextPageBtn.onclick = () => {
-                if (pageNum < totalPages - 1) {
-                    pageNum++
-                    renderPage()
-                    updateButtonState()
+                        const cur_index = data.content.findIndex(plugin => {
+                            return plugin.name?.toLowerCase()?.includes(keyword?.toLowerCase())
+                        })
+
+                        if (cur_index == -1) {
+                            createToast(`${t('no_plugins_found')}：${keyword}`, 'red')
+                            return scrollToFirstPage()
+                        }
+
+                        pageNum = Math.floor(cur_index / pageSize)
+
+                        if (pageNum == 0) {
+                            prevageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                            nextPageBtn.style.backgroundColor = ''
+                        } else if (pageNum == totalPages - 1) {
+                            prevageBtn.style.backgroundColor = ''
+                            nextPageBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                        } else {
+                            prevageBtn.style.backgroundColor = ''
+                            nextPageBtn.style.backgroundColor = ''
+                        }
+
+                        cur_page_el.innerHTML = pageNum + 1
+                        renderPluginItems(data.content.slice(pageNum * pageSize, pageNum * pageSize + pageSize), download_url)
+                        scrollToElement('#plugin_store .plugin-title', keyword)
+                        return
+                    }
+
+                    const plugin_search_reset_btn = document.querySelector('#pluginSearchResetBtn')
+                    plugin_search_reset_btn.onclick = () => {
+                        const pluginSearchInput = document.querySelector('#pluginSearchInput')
+                        pluginSearchInput.value = '';
+                        pluginSearchBtn.click() //触发搜索
+                    }
+
+                } else {
+                    items.innerHTML = `<li style="padding:10px">${t('no_plugins_found')}</li>`
                 }
-            }
-        }
+            })
+            .catch(err => {
+                console.error(err)
+                items.innerHTML = `<li style="padding:10px">${t('error_loading_plugins')}</li>`
+            })
 
-        if (prevPageBtn) {
-            prevPageBtn.onclick = () => {
-                if (pageNum > 0) {
-                    pageNum--
-                    renderPage()
-                    updateButtonState()
-                }
-            }
-        }
-
-        if (pluginSearchBtn) {
-            pluginSearchBtn.onclick = () => {
-                const keyword = pluginSearchInput?.value?.trim()
-                const resetToFirst = () => {
-                    pageNum = 0
-                    renderPage()
-                    updateButtonState()
-                    scrollToElement('#plugin_store .plugin-title', list[0]?.name)
-                }
-                if (!keyword) {
-                    return resetToFirst()
-                }
-                const index = list.findIndex(plugin => plugin.name?.toLowerCase()?.includes(keyword.toLowerCase()))
-                if (index === -1) {
-                    createToast(`${t('no_plugins_found')}：${keyword}`, 'red')
-                    return resetToFirst()
-                }
-                pageNum = Math.floor(index / pageSize)
-                renderPage()
-                updateButtonState()
-                scrollToElement('#plugin_store .plugin-title', keyword)
-            }
-        }
-
-        if (pluginSearchResetBtn) {
-            pluginSearchResetBtn.onclick = () => {
-                if (pluginSearchInput) {
-                    pluginSearchInput.value = ''
-                }
-                pluginSearchBtn?.click()
-            }
-        }
-    }
-
-    const loadPluginsForSource = async (sourceId, { showToastOnError = true } = {}) => {
-        const items = document.querySelector('#plugin_store .plugin-items')
-        const total = document.querySelector('#plugin_store .total')
-        if (!items) return
-        if (!pluginSources.length) {
-            items.innerHTML = `<li style="padding:10px">未配置插件源，请点击「源管理」添加。</li>`
-            if (total) {
-                total.innerHTML = `${t('plugin_modal_num')}: 0`
-            }
-            return
-        }
-        items.innerHTML = pluginStoreLoadingMarkup
-        if (total) {
-            total.innerHTML = ''
-        }
-        const query = sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ''
-        try {
-            const response = await fetchWithTimeout(`${KANO_baseURL}/plugins_store${query}`)
-            const data = await response.json()
-            const resData = data?.res?.data || {}
-            const content = Array.isArray(resData?.content) ? resData.content : []
-            if (data?.source?.id) {
-                activePluginSourceId = data.source.id
-            }
-            if (!pluginSources.some(src => src.id === activePluginSourceId) && pluginSources.length) {
-                activePluginSourceId = pluginSources[0].id
-            }
-            updatePluginSourceSelect()
-            setupPluginStoreView(content, data.download_url || '')
-        } catch (error) {
-            console.error(error)
-            items.innerHTML = `<li style="padding:10px">${t('error_loading_plugins')}</li>`
-            if (total) {
-                total.innerHTML = `${t('plugin_modal_num')}: 0`
-            }
-            if (showToastOnError) {
-                createToast(t('error_loading_plugins'), 'red')
-            }
-        }
-    }
-
-    const plugin_store = document.querySelector('#plugin_store_btn')
-    plugin_store.onclick = async () => {
-        const pluginModal = document.querySelector('#PluginModal')
-        if (pluginModal) {
-            pluginModal.style.display = 'none'
-        }
-
-        const plugin_store_close_btn = document.querySelector('#plugin_store_close_btn')
-        if (plugin_store_close_btn) {
-            plugin_store_close_btn.onclick = () => {
-                closeModal('#plugin_store')
-                setTimeout(() => {
-                    showModal('#PluginModal')
-                }, 200)
-            }
-        }
-
-        showModal('#plugin_store')
-
-        await fetchPluginSources()
-        updatePluginSourceSelect()
-
-        const select = document.querySelector('#pluginSourceSelect')
-        if (select) {
-            select.onchange = (event) => {
-                activePluginSourceId = event.target.value
-                loadPluginsForSource(activePluginSourceId)
-            }
-        }
-
-        const manageBtn = document.querySelector('#pluginSourceManageBtn')
-        if (manageBtn) {
-            manageBtn.onclick = () => {
-                openPluginSourceManager()
-            }
-        }
-
-        if (!pluginSources.length) {
-            const items = document.querySelector('#plugin_store .plugin-items')
-            const total = document.querySelector('#plugin_store .total')
-            if (items) {
-                items.innerHTML = `<li style="padding:10px">未配置插件源，请点击「源管理」添加。</li>`
-            }
-            if (total) {
-                total.innerHTML = `${t('plugin_modal_num')}: 0`
-            }
-            return
-        }
-
-        await loadPluginsForSource(activePluginSourceId)
     }
 
     const handlePluginStoreSearchInput = (e) => {
@@ -5968,6 +5866,183 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         }
     }
     getSELinuxStatus()
+
+    const initTerms = async () => {
+        if (!(await initRequestData())) {
+            return null
+        }
+        // 用户协议
+        const md = createModal({
+            name: "kano_terms",
+            noBlur: true,
+            isMask: true,
+            title: t('useTermsTitle'),
+            contentStyle: "font-size:12px",
+            confirmBtnText: t('accept'),
+            closeBtnText: t('decline'),
+            onClose: () => {
+                createToast(t('please_accept_terms'))
+                return false
+            },
+            onConfirm: () => {
+                const scroll = md.el.querySelector('.content')
+                if ((scroll.scrollTop < scroll.clientHeight) || (scroll.scrollTop < 50)) {
+                    // 哎呀，你怎么又没认真看😯
+                    createToast(t('please_read_terms'))
+                    return false
+                }
+                fetchWithTimeout(`${KANO_baseURL}/accept_terms`, {
+                    method: "post",
+                    headers: common_headers,
+                }).then(r => r.json()).then(res => {
+                    if (res.result == "success") {
+                        createToast(t('accept'))
+                    }
+                }).finally((res) => {
+                    //同意后检查弱口令
+                    initCheckWeakToken()
+                })
+                return true
+            },
+            content: t('useTerms')
+        })
+        const cache = localStorage.getItem('read_terms')
+        try {
+            if (await getTermsAcceptance()) {
+                if (cache != "1") {
+                    localStorage.setItem('read_terms', '1')
+                }
+                return
+            }
+            showModal(md.id)
+        } catch {
+            if (cache != "1" && cache != null && cache != undefined) {
+                showModal(md.id)
+            }
+        }
+    }
+    initTerms()
+
+    const initCheckWeakToken = async () => {
+        if (!(await initRequestData())) {
+            return null
+        }
+
+        // 没同意用户许可就不要显示
+        if (!(await getTermsAcceptance())) {
+            return null
+        }
+
+        if (await checkWeakToken()) {
+            const stor_name = 'weakTokenToastLater'
+            const threeDaysMill = 259200000
+            try {
+                const now_exp = localStorage.getItem(stor_name)
+                if (now_exp) {
+                    if (now_exp - Date.now() > 0) {
+                        const t = new Date(now_exp - Date.now())
+                        console.log(`弱口令弹窗还剩：${t.getTime() / 1000 / 60 / 60 / 24} 天`);
+                        //三天内不提示
+                        return
+                    }
+                } else {
+                    throw new Error("now_exp为空")
+                }
+            } catch {
+                console.error("weakTokenToastLater格式不合法,即将删除此stor");
+                localStorage.removeItem(stor_name)
+            }
+            const { el, close } = createFixedToast('weak_token_toast', `
+                <div style="pointer-events:all;width:80vw;max-width:300px;">
+                <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
+                <p>${t("weak_token_detected")}</p>
+                <div style="display:flex;gap:10px">
+                    <button id="close_weak_token_toast_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="change_token_now">${t("change_token_now")}</button>
+                    <button id="close_3_days_weak_token_toast_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="three_days_later">${t("three_days_later")}</button>
+                </div>
+                </div>
+                `, 'red')
+            const btn = el.querySelector('#close_weak_token_toast_btn')
+            const btn3Days = el.querySelector('#close_3_days_weak_token_toast_btn')
+
+            if (!btn) {
+                close()
+                return
+            }
+            btn.onclick = () => {
+                close()
+                showModal("#changeTokenModal")
+            }
+
+            if (!btn3Days) {
+                close()
+                return
+            }
+            btn3Days.onclick = () => {
+                localStorage.setItem(stor_name, Date.now() + threeDaysMill)
+                createToast(t('three_days_later_info'))
+                close()
+            }
+        }
+    }
+    initCheckWeakToken()
+
+    // 获取消息
+    const initMessage = async () => {
+        if (!(await initRequestData())) {
+            return null
+        }
+        try {
+            const api = 'https://api.kanokano.cn/ufi_tools_report'
+            const { device_id: uuid } = await (await fetch(`${KANO_baseURL}/device_id`, {
+                headers: common_headers
+            })).json()
+            if (uuid) {
+                const { message, has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/get_message/${uuid}`, {
+                    headers: common_headers
+                })).json()
+                if (has_read_message == true || has_read_message == "true") return
+                const { text } = parseDOM(message) //过滤掉远程任何的script脚本，防止远程任意代码自动执行
+                const { el, close } = createFixedToast('kano_message', `
+                    <div style="pointer-events:all;width:80vw;max-width:300px">
+                        <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
+                        <div style="margin:10px 0" id="kano_message_inner">${text}</div>
+                        <div style="text-align:right">
+                            <button style="font-size:.64rem" id="close_message_btn" data-i18n="pay_btn_dismiss">${t('pay_btn_dismiss')}</button>
+                        </div>
+                    </div>
+                    `)
+                const btn = el.querySelector('#close_message_btn')
+                if (!btn) {
+                    close()
+                    return
+                }
+                btn.onclick = async () => {
+                    try {
+                        const { has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/set_read_message/${uuid}`, {
+                            method: 'post',
+                            headers: common_headers
+                        })).json()
+                        if (has_read_message) {
+                            close()
+                        }
+                    } catch {
+                        try {
+                            const { has_read_message } = await (await fetch(`${api}/set_read_message/${uuid}`, {
+                                method: 'post'
+                            })).json()
+                            if (has_read_message) {
+                                close()
+                            }
+                        } catch { }
+                    } finally {
+                        close()
+                    }
+                }
+            }
+        } catch { }
+    }
+    initMessage()
 
     const togglePort = async (port, flag, isBootup = false, v6 = false) => {
         try {
@@ -6048,6 +6123,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         if (!res) createToast(t("toast_oprate_failed"), "red")
         createToast(t("toast_oprate_success"), 'green')
     }
+
     const toggleADBIP = async (flag) => {
         if (!await checkAdvanceFunc()) return createToast(t("need_advance_func"), 'red')
         const bootUp = dev_bootup.checked
@@ -6055,6 +6131,23 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         const res = togglePort("5555", flag, bootUp, v6)
         if (!res) createToast(t("toast_oprate_failed"), "red")
         createToast(t("toast_oprate_success"), 'green')
+    }
+
+    const toggleLogCat = async (flag) => {
+        try {
+            const { result } = await (await fetchWithTimeout(`${KANO_baseURL}/set_log_status`, {
+                method: "POST",
+                headers: common_headers,
+                body: JSON.stringify({ debug_log_enabled: flag ? true : false })
+            })).json()
+            if (result.success) {
+                throw new Error('Failed to toggle LogCat')
+            }
+            createToast(t("toast_oprate_success"), 'green')
+        }
+        catch {
+            if (!res) createToast(t("toast_oprate_failed"), "red")
+        }
     }
 
     const resetTTYDPort = () => {
@@ -6612,7 +6705,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 headers: common_headers
             })).json()
             if (!res) { throw new Error('No data') }
-            const isGadgetMode = res.details.typec_mode == "gadget"
+            let isGadgetMode = res.details.typec_mode == "gadget"
             el.innerHTML = `<div style="display: flex;margin-bottom:10px;flex-direction:column"><div>${t('max_speed')}：${isGadgetMode ? res.details.gadget_speed : formatSpeed(res.maxSpeed)}</div><div>${t('usb_status')}：${res.details.typec_mode}/${!isGadgetMode ? t('host_usb_exp') : t('device_usb_exp')}</div></div>
                     <ul class="deviceList" style="display: flex;flex-direction: column;gap: 10px;">
                         ${res.details.devices.map(device => `<li style="padding: 10px;">
@@ -6621,27 +6714,28 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                             <div>${t('speed')}：${formatSpeed(device.speed)}</div>
                         </li>`).join('')}
                     </ul>`.trim()
-        } catch (e) {
+        } catch {
             el.innerHTML = `<div style="text-align:center;padding:20px 0">${t('no_usb_list')}</div>`
         }
     }
 
+    //usb管理
     let stopRefreshUSBStatusInterval = null
-    const initUSBStatusManagementBtn = () => {
+    const initUSBStatusManagementBtn = async () => {
         const btn = document.querySelector('#USBStatusManagement')
-        if (!btn) return
+        if (!(await initRequestData())) {
+            btn.onclick = () => createToast(t('toast_please_login'), 'red')
+            return null
+        }
         btn.onclick = async () => {
-            if (!(await initRequestData())) {
-                createToast(t('toast_please_login'), 'red')
-                return
-            }
             showModal('#USBStatusModal')
-            const contentEl = document.querySelector('#USBStatusModal .content')
-            if (!contentEl) return
-            contentEl.innerHTML = `<div style="text-align:center;padding:20px 0">Loading...</div>`
+            //加载数据
+            const el = document.querySelector('#USBStatusModal .content')
+            if (!el) return
+            el.innerHTML = `<div style="text-align:center;padding:20px 0">Loading...</div>`
             stopRefreshUSBStatusInterval && stopRefreshUSBStatusInterval()
-            fetchUSBStatusList(contentEl)
-            stopRefreshUSBStatusInterval = requestInterval(() => fetchUSBStatusList(contentEl), REFRESH_TIME + 1000)
+            fetchUSBStatusList(el)
+            stopRefreshUSBStatusInterval = requestInterval(() => fetchUSBStatusList(el), REFRESH_TIME + 1000)
         }
     }
     initUSBStatusManagementBtn()
@@ -6652,9 +6746,113 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         })
     }
 
+    //官方后台貌似对PIN超出次数的判定有问题，PIN次数用完后提示输入PUK，此时换卡也不会变更状态，用户只能恢复出厂设置，所以此功能不会继续实现
+    // let simCardPinDisabled = false
+    // const initSimCardPin = async () => {
+    //     if (!initRequestData()) {
+    //         return null
+    //     }
+    //     //检测是否有SIM卡锁定
+    //     const res = await getSimPinStatus()
+
+    //     if (res.pinnumber <= 0 || res.modem_main_state == "modem_waitpuk") {
+    //         createToast("您的PIN次数已用尽，请前往官方后台输入PUK码解锁", 'red', 10000)
+    //         return null
+    //     }
+
+    //     if (!(res.modem_main_state == "modem_waitpin")) {
+    //         return null
+    //     }
+
+    //     //暂停数据刷新
+    //     stopRefresh()
+
+    //     const md = createModal({
+    //         name: "kano_pin_modal",
+    //         isMask: true,
+    //         title: "请输入SIM卡PIN码",
+    //         maxWidth: "400px",
+    //         contentStyle: "font-size:12px",
+    //         onClose: () => {
+    //             return true
+    //         },
+    //         onConfirm: async () => {
+    //             //再次获取数据
+    //             const res1 = await getSimPinStatus()
+    //             if (res1.pinnumber <= 0) {
+    //                 createToast("您的PIN次数已用尽，请前往官方后台输入PUK码解锁", 'red')
+    //                 return false
+    //             }
+    //             const el = document.querySelector('#simPinInput')
+    //             if (!el) {
+    //                 console.error("没有找到#simPinInput元素")
+    //                 return false
+    //             }
+    //             const pinNumber = el.value.trim()
+    //             if (pinNumber.length < 4) {
+    //                 createToast("PIN不得小于4位数", 'pink')
+    //                 return false
+    //             }
+    //             //解锁
+    //             if (simCardPinDisabled) {
+    //                 createToast("正在解锁中，请勿重复点击", 'pink')
+    //                 return false
+    //             }
+
+    //             simCardPinDisabled = true
+
+    //             const { close: closeLoadingEl } = createFixedToast("unlocking_toast", '解锁中...')
+    //             try {
+    //                 if (!(await initRequestData())) {
+    //                     return false
+    //                 }
+    //                 const cookie = await login()
+    //                 if (!cookie) {
+    //                     createToast(t('toast_request_error'), 'red')
+    //                     return false
+    //                 }
+    //                 let res1 = await (await postData(cookie, {
+    //                     goformId: 'ENTER_PIN',
+    //                     PinNumber: pinNumber,
+    //                 })).json()
+
+    //                 if (res1.result == 'success') {
+    //                     createToast("PIN解锁成功", 'green')
+    //                     startRefresh()
+    //                     return true
+    //                 } else {
+    //                     createToast("PIN解锁失败，请重试", 'red')
+    //                 }
+    //                 //更新Pin次数
+    //                 const pinNumEl = document.querySelector('#pinNumber')
+    //                 const res_refresh = await getSimPinStatus()
+    //                 if (pinNumEl) {
+    //                     pinNumEl.textContent = res_refresh.pinnumber
+    //                 }
+    //                 return false
+    //             } catch (e) {
+    //                 console.error(e.message)
+    //                 return false
+    //             } finally {
+    //                 simCardPinDisabled = false
+    //                 closeLoadingEl()
+    //             }
+    //         },
+    //         content: `<div class="content" style="font-size:12px;margin:10px 0;padding:0 4px;">
+    //    <p style="color:red;margin-top:0" >PIN 剩余次数：<strong id="pinNumber">${res.pinnumber}</strong></p>
+    //    <input type="password" id="simPinInput" placeholder="SIM卡PIN码" style="width:100%;padding:8px">
+    // </div>`
+    //     })
+    //     showModal(md.id)
+    // }
+    // initSimCardPin()
     //挂载方法到window
     const methods = {
         closeUSBStatusModal,
+        onCloseChangeTokenForm,
+        handleChangeToken,
+        toggleLogCat,
+        changeResServer,
         onChangeIsAutoFrofile,
         onViewAPNProfile,
         changeSleepTime,
@@ -6729,12 +6927,14 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         onCloseChangePassForm,
         startTest,
         handleLoopMode,
+        onClosePayModal,
         handleTTYDFormSubmit,
         handleQosAT,
         handleSambaPath,
         handleAT,
         setOrRemoveDeviceFromBlackList,
         onSelectCellRow,
+        handleClosePayModal,
         toggleCellInfoRefresh
     }
 

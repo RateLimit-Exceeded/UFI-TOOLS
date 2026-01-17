@@ -6,6 +6,7 @@ import com.minikano.f50_sms.modules.advanced.advancedToolsModule
 import com.minikano.f50_sms.modules.at.anyProxyModule
 import com.minikano.f50_sms.modules.at.atModule
 import com.minikano.f50_sms.modules.auth.authenticatedRoute
+import com.minikano.f50_sms.modules.config.configModule
 import com.minikano.f50_sms.modules.deviceInfo.baseDeviceInfoModule
 import com.minikano.f50_sms.modules.ota.otaModule
 import com.minikano.f50_sms.modules.plugins.pluginsModule
@@ -21,7 +22,7 @@ import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.routing.routing
 
 
-const val BASE_TAG = "kano_ZTE_LOG"
+const val BASE_TAG = "UFI_TOOLS_LOG"
 const val PREFS_NAME = "kano_ZTE_store"
 
 fun Application.mainModule(context: Context, proxyServerIp: String) {
@@ -34,6 +35,8 @@ fun Application.mainModule(context: Context, proxyServerIp: String) {
         staticFileModule(context)
 
         authenticatedRoute(context) {
+
+            configModule(context)
 
             anyProxyModule(context)
 

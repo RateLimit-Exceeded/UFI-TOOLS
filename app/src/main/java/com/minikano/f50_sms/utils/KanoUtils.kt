@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.BatteryManager
@@ -27,6 +28,8 @@ import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import androidx.core.content.edit
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 class KanoUtils {
     companion object {
@@ -214,20 +217,20 @@ class KanoUtils {
 
             // 如果是追加模式且目标文件已存在，则直接返回该文件，避免干扰可执行文件的运行
             if (skipIfExists && outFile.exists()) {
-                KanoLog.d("kano_ZTE_LOG", "文件已存在，跳过复制：${outFile.absolutePath}")
+                KanoLog.d("UFI_TOOLS_LOG", "文件已存在，跳过复制：${outFile.absolutePath}")
                 return outFile
             }
 
             val input = try {
                 assetManager.open(path)
             } catch (e: Exception) {
-                KanoLog.e("kano_ZTE_LOG", "assets 中不存在文件: $path")
+                KanoLog.e("UFI_TOOLS_LOG", "assets 中不存在文件: $path")
                 return null
             }
 
             return try {
                 KanoLog.d(
-                    "kano_ZTE_LOG",
+                    "UFI_TOOLS_LOG",
                     "开始复制 $fileName 到 ${context.filesDir}（skipIfExists？：$skipIfExists）"
                 )
                 input.use { ins ->
@@ -235,10 +238,10 @@ class KanoUtils {
                         ins.copyTo(out)
                     }
                 }
-                KanoLog.d("kano_ZTE_LOG", "复制 $fileName 成功 -> ${outFile.absolutePath}")
+                KanoLog.d("UFI_TOOLS_LOG", "复制 $fileName 成功 -> ${outFile.absolutePath}")
                 outFile
             } catch (e: Exception) {
-                KanoLog.e("kano_ZTE_LOG", "复制 $fileName 失败: ${e.message}")
+                KanoLog.e("UFI_TOOLS_LOG", "复制 $fileName 失败: ${e.message}")
                 null
             }
         }
@@ -276,19 +279,19 @@ class KanoUtils {
             val currentIp = IPManager.getHotspotGatewayIp("8080")
 
             if ((ip_add != null && need_auto_ip == "true") || userTouched) {
-                KanoLog.d("kano_ZTE_LOG", "自动检测IP网关:$currentIp")
+                KanoLog.d("UFI_TOOLS_LOG", "自动检测IP网关:$currentIp")
                 if (currentIp == null) {
-                    KanoLog.d("kano_ZTE_LOG", "自动检测IP网关失败")
+                    KanoLog.d("UFI_TOOLS_LOG", "自动检测IP网关失败")
                     Toast.makeText(context, "自动检测IP网关失败...", Toast.LENGTH_SHORT).show()
                     return
                 }
                 if ((currentIp != ip_add) || userTouched) {
                     if (userTouched) {
-                        KanoLog.d("kano_ZTE_LOG", "用户点击，自动检测IP网关")
+                        KanoLog.d("UFI_TOOLS_LOG", "用户点击，自动检测IP网关")
                         Toast.makeText(context, "自动检测IP网关~", Toast.LENGTH_SHORT).show()
                     } else {
                         KanoLog.d(
-                            "kano_ZTE_LOG",
+                            "UFI_TOOLS_LOG",
                             "检测到本地IP网关变动，自动修改IP网关为:$currentIp"
                         )
                         Toast.makeText(
@@ -304,8 +307,8 @@ class KanoUtils {
                 }
             } else if (need_auto_ip == "true") {
                 //说明可能是第一次启动
-                prefs.edit().putString("gateway_ip", currentIp).commit()
-                KanoLog.d("kano_ZTE_LOG", "可能是第一次启动，自动修改IP网关为:$currentIp")
+                prefs.edit(commit = true) { putString("gateway_ip", currentIp) }
+                KanoLog.d("UFI_TOOLS_LOG", "可能是第一次启动，自动修改IP网关为:$currentIp")
             }
         }
 
@@ -321,11 +324,11 @@ class KanoUtils {
                     val req = KanoGoformRequest("http://$ADB_IP:8080")
                     val result = req.getData(mapOf("cmd" to "usb_port_switch"))
                     val adb_enabled = result?.getString("usb_port_switch")
-                    Log.d("kano_ZTE_LOG", "查询ADB开启状态: $adb_enabled")
+                    Log.d("UFI_TOOLS_LOG", "查询ADB开启状态: $adb_enabled")
                     adb_enabled == "1"
                 }
             } catch (e: Exception) {
-                Log.e("kano_ZTE_LOG", "查询ADB开启状态执行错误: ${e.message}")
+                Log.e("UFI_TOOLS_LOG", "查询ADB开启状态执行错误: ${e.message}")
                 false
             }
         }
@@ -340,20 +343,20 @@ class KanoUtils {
 
             // 如果是追加模式且目标文件已存在，则直接返回该文件，避免干扰可执行文件的运行
             if (skipIfExists && outFile.exists()) {
-                KanoLog.d("kano_ZTE_LOG", "外部文件已存在，跳过复制：${outFile.absolutePath}")
+                KanoLog.d("UFI_TOOLS_LOG", "外部文件已存在，跳过复制：${outFile.absolutePath}")
                 return outFile
             }
 
             val input = try {
                 context.assets.open(assetPath)
             } catch (e: Exception) {
-                KanoLog.e("kano_ZTE_LOG", "assets 中不存在文件: $assetPath")
+                KanoLog.e("UFI_TOOLS_LOG", "assets 中不存在文件: $assetPath")
                 return null
             }
 
             return try {
                 KanoLog.d(
-                    "kano_ZTE_LOG",
+                    "UFI_TOOLS_LOG",
                     "开始复制 $fileName 到外部存储目录（skipIfExists?：$skipIfExists）"
                 )
                 input.use { ins ->
@@ -361,10 +364,10 @@ class KanoUtils {
                         ins.copyTo(out)
                     }
                 }
-                KanoLog.d("kano_ZTE_LOG", "复制成功 -> ${outFile.absolutePath}")
+                KanoLog.d("UFI_TOOLS_LOG", "复制成功 -> ${outFile.absolutePath}")
                 outFile
             } catch (e: Exception) {
-                KanoLog.e("kano_ZTE_LOG", "复制失败: ${e.message}")
+                KanoLog.e("UFI_TOOLS_LOG", "复制失败: ${e.message}")
                 null
             }
         }
@@ -495,7 +498,7 @@ class KanoUtils {
 
         fun disableFota(context: Context):Boolean{
             if(isExecutingDisabledFOTA){
-                KanoLog.w("kano_ZTE_LOG", "禁用FOTA操作正在执行..无需重复执行")
+                KanoLog.w("UFI_TOOLS_LOG", "禁用FOTA操作正在执行..无需重复执行")
                 return false
             }
             try {
@@ -526,14 +529,72 @@ class KanoUtils {
             }
         }
 
+        fun isWeakToken(token: String): Boolean {
+            val t = token.ifBlank { "admin" }
+
+            val rules: List<(String) -> Boolean> = listOf(
+                { it == "admin" },           // 默认弱口令
+                { it.length < 8 },           // 最小长度
+                { !it.any { c -> c.isDigit() } }, // 没有数字
+                { !it.any { c -> c.isLetter() } } // 没有字母
+            )
+
+            return rules.any { rule -> rule(t) }
+        }
+
         fun isUsbDebuggingEnabled(context: Context): Boolean {
             return try {
                 Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 try {
                     Settings.Secure.getInt(context.contentResolver, Settings.Secure.ADB_ENABLED, 0) == 1
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    //防止权限原因读取不到，默认是Enabled
                     true
+                }
+            }
+        }
+
+        fun normalizePath(rawPath: String): String {
+            fun decodeOnce(s: String): String {
+                return try {
+                    URLDecoder.decode(s, StandardCharsets.UTF_8.name())
+                } catch (e: Exception) {
+                    s
+                }
+            }
+
+            var p = decodeOnce(rawPath)
+            p = decodeOnce(p)
+
+            p = p.replace('\\', '/')
+
+            p = p.replace(Regex("/+"), "/")
+
+            if (!p.startsWith("/")) p = "/$p"
+
+            return p
+        }
+
+        fun normalizeLeadingSlashes(p: String): String {
+            var s = p.replace('\\', '/')
+            s = s.replace(Regex("^/+"), "/")
+            if (!s.startsWith("/")) s = "/$s"
+            return s
+        }
+
+        fun isSha256Hex(s: String?): Boolean {
+            return !s.isNullOrBlank() && Regex("^[a-fA-F0-9]{64}$").matches(s)
+        }
+
+        fun transformLoginToken(context: Context,prefs: SharedPreferences){
+            //预处理口令，如果口令存储为明文，则进行hash
+            val token = prefs.getString("login_token","") ?: ""
+            if(!(token.isEmpty() || token.isBlank())){
+                //如果存储的口令不是hash，则进行更改
+                if(!isSha256Hex(token) ){
+                    val hashToken = sha256Hex(token)
+                    prefs.edit(commit = true) { putString("login_token", hashToken) }
                 }
             }
         }

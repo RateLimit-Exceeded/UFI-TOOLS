@@ -50,18 +50,19 @@ import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.UniqueDeviceIDManager
 import com.minikano.f50_sms.utils.WakeLock
+import com.minikano.f50_sms.utils.getBooleanCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
+import androidx.core.content.edit
+import com.minikano.f50_sms.configs.AppMeta.updateIsDefaultOrWeakToken
 
 class MainActivity : ComponentActivity() {
     companion object {
         const val REQUEST_CODE_NOTIFICATION = 114514
         const val REQUEST_CODE_SMS = 1919810
-        @Volatile
-        var isEnableLog = false
     }
     private val port = 2333
     private val PREFS_NAME = "kano_ZTE_store"
@@ -92,23 +93,28 @@ class MainActivity : ComponentActivity() {
 
         //第一次启动初始化login_token
         val spf = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if(!spf.contains(PREF_LOGIN_TOKEN)){
-            spf.edit().putString(PREF_LOGIN_TOKEN, "admin").commit()
-        }
-        if(!spf.contains(PREF_ISDEBUG)){
-            spf.edit().putString(PREF_ISDEBUG, "false").commit()
-        }
-        if(!spf.contains(PREF_GATEWAY_IP)){
-            spf.edit().putString(PREF_GATEWAY_IP, "192.168.0.1:8080").commit()
-        }
-        if(!spf.contains(PREF_TOKEN_ENABLED)){
-            spf.edit().putString(PREF_TOKEN_ENABLED, true.toString()).commit()
-        }
-        if(!spf.contains(PREF_AUTO_IP_ENABLED)){
-            spf.edit().putString(PREF_AUTO_IP_ENABLED, true.toString()).commit()
-        }
-        if(!spf.contains(PREF_WAKELOCK)){
-            spf.edit().putString(PREF_WAKELOCK,"lock").commit()
+        KanoUtils.transformLoginToken(context,spf)
+        val existing = spf.all
+        spf.edit(commit = true) {
+            if (!existing.containsKey(PREF_LOGIN_TOKEN)) {
+                putString(PREF_LOGIN_TOKEN, KanoUtils.sha256Hex("admin"))
+                updateIsDefaultOrWeakToken(context,true)
+            }
+            if (!existing.containsKey(PREF_ISDEBUG)) {
+                putBoolean(PREF_ISDEBUG, false)
+            }
+            if (!existing.containsKey(PREF_GATEWAY_IP)) {
+                putString(PREF_GATEWAY_IP, "192.168.0.1:8080")
+            }
+            if (!existing.containsKey(PREF_TOKEN_ENABLED)) {
+                putString(PREF_TOKEN_ENABLED, true.toString())
+            }
+            if (!existing.containsKey(PREF_AUTO_IP_ENABLED)) {
+                putString(PREF_AUTO_IP_ENABLED, true.toString())
+            }
+            if (!existing.containsKey(PREF_WAKELOCK)) {
+                putString(PREF_WAKELOCK, "lock")
+            }
         }
 
         // 这里用协程异步调用
@@ -131,8 +137,11 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+
                         CircularProgressIndicator()
+
                         Spacer(modifier = Modifier.height(12.dp))
+
                         Text("加载数据中(Loading)...", fontSize = 16.sp)
                     }
                 }
@@ -239,7 +248,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val sf = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                isEnableLog = sf.getString(PREF_ISDEBUG,"false").equals("true")
+                AppMeta.setIsEnableLog(context,sf.getBooleanCompat(PREF_ISDEBUG,false))
 
                 setContent {
                     val context = this@MainActivity
@@ -266,6 +275,13 @@ class MainActivity : ComponentActivity() {
                             ) ?: "admin"
                         )
                     }
+
+                    var loginTokenInput by remember {
+                        mutableStateOf(
+                            ""
+                        )
+                    }
+
                     var isTokenEnabled by remember {
                         mutableStateOf(
                             sharedPrefs.getString(
@@ -285,10 +301,10 @@ class MainActivity : ComponentActivity() {
 
                     var isDebugLog by remember {
                         mutableStateOf(
-                            sharedPrefs.getString(
+                            sharedPrefs.getBooleanCompat(
                                 PREF_ISDEBUG,
-                                false.toString()
-                            ) ?: false.toString()
+                                false
+                            )
                         )
                     }
 
@@ -309,23 +325,53 @@ class MainActivity : ComponentActivity() {
                             onStopServer = {
                                 sendBroadcast(Intent(UI_INTENT).putExtra("status", false))
                                 serverStatusLiveData.postValue(false)
-                                KanoLog.d("kano_ZTE_LOG", "user touched stop btn")
+
+                                gatewayIp = sharedPrefs.getString(
+                                            PREF_GATEWAY_IP,
+                                            "192.168.0.1:8080"
+                                        ) ?: "192.168.0.1:8080"
+
+                                loginToken = sharedPrefs.getString(
+                                            PREF_LOGIN_TOKEN,
+                                            "admin"
+                                        ) ?: "admin"
+
+                                isTokenEnabled = sharedPrefs.getString(
+                                            PREF_TOKEN_ENABLED,
+                                            true.toString()
+                                        ) ?: true.toString()
+
+                                isAutoIpEnabled = sharedPrefs.getString(
+                                            PREF_AUTO_IP_ENABLED,
+                                            true.toString()
+                                        ) ?: true.toString()
+
+                                isDebugLog = sharedPrefs.getBooleanCompat(
+                                        PREF_ISDEBUG,
+                                        false)
+
+                                wakeLock  = sharedPrefs.getString(
+                                    PREF_WAKELOCK,
+                                    "lock"
+                                ) ?: "lock"
+
+                                KanoLog.d("UFI_TOOLS_LOG", "user touched stop btn")
                             }
                         )
                     } else {
                         InputUI(
                             gatewayIp = gatewayIp,
                             onGatewayIpChange = { gatewayIp = it },
-                            loginToken = loginToken,
+                            loginToken = loginTokenInput,
                             versionName = versionName ?: "unknown",
                             onLoginTokenChange = {
-                                loginToken = it.ifBlank {
+                                loginTokenInput = it.ifBlank {
                                     ""
                                 }
                             },
                             isTokenEnabled = isTokenEnabled == true.toString(),
                             isAutoCheckIp = isAutoIpEnabled == true.toString(),
-                            isDebug = isDebugLog == true.toString(),
+                            isDebug = isDebugLog == true,
                             isWkLock = wakeLock == "lock",
                             onTokenEnableChange = { isTokenEnabled = it.toString() },
                             onAutoCheckIpChange = {
@@ -337,9 +383,8 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onDebugChange = {
-                                isEnableLog = it
-                                isDebugLog = it.toString()
-                                sharedPrefs.edit().putString(PREF_ISDEBUG, isEnableLog.toString()).commit()
+                                AppMeta.setIsEnableLog(sharedPrefs,it)
+                                isDebugLog = it
                             },
                             onIsWkLockChange = {
                                 wakeLock = if(it){
@@ -350,13 +395,20 @@ class MainActivity : ComponentActivity() {
                             },
                             onConfirm = {
                                 // 保存并重启服务器
-                                sharedPrefs.edit()
-                                    .putString(PREF_GATEWAY_IP, gatewayIp)
-                                    .putString(PREF_LOGIN_TOKEN, loginToken.ifBlank { "admin" })
-                                    .putString(PREF_TOKEN_ENABLED, isTokenEnabled)
-                                    .putString(PREF_AUTO_IP_ENABLED, isAutoIpEnabled)
-                                    .putString(PREF_WAKELOCK, wakeLock)
-                                    .commit()
+
+                                if(!loginTokenInput.isBlank()){
+                                    sharedPrefs.edit(commit = true) {
+                                        putString(PREF_LOGIN_TOKEN,KanoUtils.sha256Hex(loginTokenInput.ifBlank { "admin" }) )
+                                        updateIsDefaultOrWeakToken(context,KanoUtils.isWeakToken(loginTokenInput.ifBlank { "admin" }))
+                                    }
+                                }
+
+                                sharedPrefs.edit(commit = true) {
+                                    putString(PREF_GATEWAY_IP, gatewayIp)
+                                    putString(PREF_TOKEN_ENABLED, isTokenEnabled)
+                                    putString(PREF_AUTO_IP_ENABLED, isAutoIpEnabled)
+                                    putString(PREF_WAKELOCK, wakeLock)
+                                }
                                 //更新唤醒锁
                                 if(wakeLock != "lock"){
                                     WakeLock.releaseWakeLock()
@@ -365,7 +417,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 sendBroadcast(Intent(UI_INTENT).putExtra("status", true))
                                 serverStatusLiveData.postValue(true)
-                                KanoLog.d("kano_ZTE_LOG", "user touched start btn")
+                                KanoLog.d("UFI_TOOLS_LOG", "user touched start btn")
                                 runADB()
                             }
                         )
@@ -432,14 +484,14 @@ class MainActivity : ComponentActivity() {
             try {
                 ShellKano.runShellCommand("/system/bin/setprop persist.service.adb.tcp.port 5555")
                 ShellKano.runShellCommand("/system/bin/setprop service.adb.tcp.port 5555")
-                KanoLog.d("kano_ZTE_LOG", "网络adb调试执行成功")
+                KanoLog.d("UFI_TOOLS_LOG", "网络adb调试执行成功")
             } catch (e: Exception) {
                 try {
                     ShellKano.runShellCommand("/system/bin/setprop service.adb.tcp.port 5555")
                     ShellKano.runShellCommand("/system/bin/setprop persist.service.adb.tcp.port 5555")
-                    KanoLog.d("kano_ZTE_LOG", "网络adb调试执行成功")
+                    KanoLog.d("UFI_TOOLS_LOG", "网络adb调试执行成功")
                 } catch (e: Exception) {
-                    KanoLog.d("kano_ZTE_LOG", "网络adb调试出错： ${e.message}")
+                    KanoLog.d("UFI_TOOLS_LOG", "网络adb调试出错： ${e.message}")
                 }
             }
         }.start()
@@ -450,7 +502,7 @@ class MainActivity : ComponentActivity() {
             val action = intent?.action
             if (action == SERVER_INTENT) {
                 val isRunning = intent.getBooleanExtra("status", false) ?: false
-                KanoLog.d("kano_ZTE_LOG", "isServerRunning is $isRunning")
+                KanoLog.d("UFI_TOOLS_LOG", "isServerRunning is $isRunning")
                 serverStatusLiveData.postValue(isRunning)
             }
         }
@@ -544,7 +596,7 @@ fun InputUI(
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("admin") }
+                    placeholder = { Text("不更改/Not Change") }
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 // 开关组

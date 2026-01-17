@@ -81,7 +81,7 @@ android {
         targetSdk = 33
         // 动态生成 versionCode 为 yyyyMMdd 格式
         versionCode = SimpleDateFormat("yyyyMMdd").format(Date()).toInt()
-        versionName = "3.8.7A"
+        versionName = "3.8.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -143,7 +143,7 @@ android {
             variant.outputs.all {
                 val output = this as BaseVariantOutputImpl
 
-                val appName = "ZTE-UFI-TOOLS_WEB"
+                val appName = "UFI-TOOLS_WEB"
                 val versionName = variant.versionName ?: variant.versionCode
                 val versionCode = variant.versionCode
                 val date = SimpleDateFormat("HHmm").format(Date())
