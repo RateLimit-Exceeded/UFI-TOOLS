@@ -3,15 +3,11 @@ package com.minikano.f50_sms.configs
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
-import com.minikano.f50_sms.modules.PREFS_NAME
-import com.minikano.f50_sms.utils.DeviceModelChecker
-
+import androidx.core.content.edit
 import com.minikano.f50_sms.utils.KanoLog
+import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.getBooleanCompat
 import java.io.File
-import androidx.core.content.edit
-import com.minikano.f50_sms.utils.KanoUtils
-import com.minikano.f50_sms.utils.KanoUtils.Companion.isSha256Hex
 
 object AppMeta {
     var versionName: String = "unknown"
@@ -20,11 +16,11 @@ object AppMeta {
         private set
     var model: String = Build.MODEL
         private set
-    var isDeviceRooted:Boolean = false
+    var isDeviceRooted: Boolean = false
         private set
-    var isReadUseTerms:Boolean = false
+    var isReadUseTerms: Boolean = false
 
-    var isEnableLog:Boolean = false
+    var isEnableLog: Boolean = false
         private set
 
     var GLOBAL_SERVER_URL = "https://pan.kanokano.cn"
@@ -35,29 +31,30 @@ object AppMeta {
 
     private const val PREFS_NAME = "kano_ZTE_store"
     private const val GLOBAL_SERVER_URL_KEY = "GLOBAL_SERVER_URL"
-    private val PREF_ISDEBUG = "kano_is_debug"
+    private const val PREF_ISDEBUG = "kano_is_debug"
+    private const val PREF_IS_WEAK_TOKEN = "is_weak_token"
+    private const val PREF_LOGIN_TOKEN = "login_token"
+    private const val PREF_TOKEN_ENABLED = "login_token_enabled"
 
-    private val PREF_IS_WEAK_TOKEN = "is_weak_token"
-
-    fun updateIsDefaultOrWeakToken(context: Context,value: Boolean) {
+    fun updateIsDefaultOrWeakToken(context: Context, value: Boolean) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         //持久化
         prefs.edit(commit = true) {
-            putBoolean(PREF_IS_WEAK_TOKEN,value)
+            putBoolean(PREF_IS_WEAK_TOKEN, value)
         }
         isDefaultOrWeakToken = value
     }
 
-    fun setGlobalServerUrl(context: Context,url: String) {
-        if(url.isEmpty() || url.isBlank()) throw Exception("url is empty")
+    fun setGlobalServerUrl(context: Context, url: String) {
+        if (url.isEmpty() || url.isBlank()) throw Exception("url is empty")
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit(commit = true) { putString(GLOBAL_SERVER_URL_KEY, url) }
         GLOBAL_SERVER_URL = url
     }
 
-    fun setIsEnableLog(context: Context,flag: Boolean) {
+    fun setIsEnableLog(context: Context, flag: Boolean) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit(commit = true) { putBoolean(PREF_ISDEBUG, flag)}
+        prefs.edit(commit = true) { putBoolean(PREF_ISDEBUG, flag) }
         isEnableLog = flag
     }
 
@@ -70,11 +67,27 @@ object AppMeta {
         try {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-            val isWeak = prefs.getBoolean(PREF_IS_WEAK_TOKEN, false)
-            updateIsDefaultOrWeakToken(context,isWeak)
-
-            //预处理口令
+            //预处理口令：如果历史存储为明文则转 sha256
             KanoUtils.transformLoginToken(context, prefs)
+
+            // 清除数据后，服务可能会在 MainActivity 初始化口令前自启（BootReceiver/WebService）。
+            // 为避免 token 为空导致无法鉴权/TTYD 密码错误，这里保证默认口令存在（默认：admin）。
+            val token = prefs.getString(PREF_LOGIN_TOKEN, null)?.trim()
+            if (token.isNullOrBlank()) {
+                prefs.edit(commit = true) {
+                    putString(PREF_LOGIN_TOKEN, KanoUtils.sha256Hex("admin"))
+                    putString(PREF_TOKEN_ENABLED, true.toString())
+                    putBoolean(PREF_IS_WEAK_TOKEN, true)
+                }
+            } else {
+                // 如果 token 仍是默认 admin（sha256 形式），同步弱口令标记
+                val adminHash = KanoUtils.sha256Hex("admin")
+                if (token.equals(adminHash, ignoreCase = true) && !prefs.getBoolean(PREF_IS_WEAK_TOKEN, false)) {
+                    prefs.edit(commit = true) { putBoolean(PREF_IS_WEAK_TOKEN, true) }
+                }
+            }
+
+            isDefaultOrWeakToken = prefs.getBoolean(PREF_IS_WEAK_TOKEN, false)
 
             val globalServerAddress = prefs.getString(GLOBAL_SERVER_URL_KEY, null)
             if (globalServerAddress != null) {
@@ -94,11 +107,8 @@ object AppMeta {
             isReadUseTerms = prefs.getString("isReadUseTerms", "false").toBoolean()
 
             isEnableLog = prefs.getBooleanCompat(PREF_ISDEBUG, false)
-
-            // //获取口令，检查是否为弱口令
-            // updateIsDefaultOrWeakToken(KanoUtils.isWeakToken(token))
         } catch (e: Exception) {
-            KanoLog.e("UFI_TOOLS_LOG","AppMeta init failed！！",e)
+            KanoLog.e("UFI_TOOLS_LOG", "AppMeta init failed！！", e)
         }
     }
 }
