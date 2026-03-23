@@ -1,6 +1,7 @@
 package com.minikano.f50_sms.modules.plugins
 
 import android.content.Context
+import com.minikano.f50_sms.configs.AppMeta
 import com.minikano.f50_sms.modules.BASE_TAG
 import com.minikano.f50_sms.modules.auth.authenticatedRoute
 import com.minikano.f50_sms.utils.KanoLog
@@ -25,6 +26,28 @@ fun Route.pluginsModule(context: Context) {
 
     val pluginSourcePrefName = "kano_ZTE_store"
     val pluginSourcePrefKey = "kano_plugin_sources"
+
+    fun builtInPluginSources(): JSONArray {
+        val baseUrl = AppMeta.GLOBAL_SERVER_URL.trim().trimEnd('/')
+        val host = try {
+            URI(baseUrl).host?.takeIf { it.isNotBlank() } ?: baseUrl
+        } catch (_: Exception) {
+            baseUrl
+        }
+        val path = "/UFI-TOOLS-UPDATE/plugins/ufi-tools-plugins"
+        return JSONArray().apply {
+            put(
+                JSONObject().apply {
+                    put("id", "builtin-pan-kanokano-cn")
+                    put("name", host)
+                    put("downloadUrl", "$baseUrl/d$path")
+                    put("apiUrl", "$baseUrl/api/fs/list")
+                    put("path", path)
+                    put("password", "")
+                }
+            )
+        }
+    }
 
     fun normalizePath(raw: String): String {
         if (raw.isBlank()) {
@@ -242,19 +265,36 @@ fun Route.pluginsModule(context: Context) {
 
     fun loadPluginSources(): JSONArray {
         val result = JSONArray()
+        val seenIds = mutableSetOf<String>()
+
+        fun addSource(raw: JSONObject, builtIn: Boolean) {
+            val sanitized = sanitizeSource(raw, builtIn) ?: return
+            val sourceId = sanitized.optString("id")
+            if (sourceId.isBlank()) return
+            if (seenIds.add(sourceId)) {
+                result.put(sanitized)
+            }
+        }
+
+        // Always include built-in sources first.
+        try {
+            val builtIns = builtInPluginSources()
+            for (i in 0 until builtIns.length()) {
+                val raw = builtIns.optJSONObject(i) ?: continue
+                addSource(raw, true)
+            }
+        } catch (e: Exception) {
+            KanoLog.d(TAG, "加载内置插件源失败：${e.message}")
+        }
+
         val sharedPref = context.getSharedPreferences(pluginSourcePrefName, Context.MODE_PRIVATE)
         val stored = sharedPref.getString(pluginSourcePrefKey, null)
         if (!stored.isNullOrBlank()) {
             try {
                 val storedArray = JSONArray(stored)
-                val seenIds = mutableSetOf<String>()
                 for (i in 0 until storedArray.length()) {
                     val raw = storedArray.optJSONObject(i) ?: continue
-                    val sanitized = sanitizeSource(raw, false) ?: continue
-                    val sourceId = sanitized.optString("id")
-                    if (seenIds.add(sourceId)) {
-                        result.put(sanitized)
-                    }
+                    addSource(raw, false)
                 }
             } catch (e: Exception) {
                 KanoLog.d(TAG, "解析插件源配置失败：${e.message}")

@@ -2934,20 +2934,22 @@ function main_func() {
     }
     initTTYD()
 
-    let click_count_ttyd = 1
-    let ttyd_timer = null
-    let enableTTYD = () => {
-        click_count_ttyd++
-        if (click_count_ttyd == 4) {
-            // 启用ttyd弹窗
-            initResServer()
-            showModal('#TTYDModal')
+    const openDevMenu = async (e) => {
+        try {
+            e?.preventDefault?.()
+        } catch { }
+
+        if (!(await initRequestData())) {
+            createToast(t('toast_please_login'), 'red')
+            return
         }
-        ttyd_timer && clearInterval(ttyd_timer)
-        ttyd_timer = setTimeout(() => {
-            click_count_ttyd = 1
-        }, 1999)
+
+        await initResServer()
+        showModal('#TTYDModal')
     }
+
+    // Backward compatible name
+    const enableTTYD = openDevMenu
 
     let handleTTYDFormSubmit = (e) => {
         e.preventDefault()
@@ -5709,39 +5711,246 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         return found
     }
 
-    //插件市场
-    const plugin_store_modal = document.querySelector('#plugin_store')
-    plugin_store_modal.onclick = (e) => {
-        e.stopPropagation()
-        const pluginModal = document.querySelector('#PluginModal')
-        const classList = Array.from(e?.target?.classList || [])
-        const id = e.target.id
-        if (classList && classList.includes('mask')) {
-            if (id) {
-                closeModal(`#${id}`);
-                setTimeout(() => {
-                    showModal('#PluginModal')
-                }, 200);
+    const PLUGIN_STORE_SOURCE_ID_KEY = 'kano_plugin_store_source_id'
+    let pluginStoreSourcesCache = []
+
+    const fetchPluginSources = async () => {
+        try {
+            const { sources } = await (await fetchWithTimeout(`${KANO_baseURL}/plugin_sources`)).json()
+            if (Array.isArray(sources)) {
+                return sources
             }
+        } catch (e) {
+            console.error("fetchPluginSources Error:", e)
+        }
+        return []
+    }
+
+    const buildPluginStoreUrl = (sourceId) => {
+        try {
+            const params = new URLSearchParams()
+            if (sourceId) params.set('sourceId', sourceId)
+            const qs = params.toString()
+            return `${KANO_baseURL}/plugins_store${qs ? `?${qs}` : ''}`
+        } catch {
+            return `${KANO_baseURL}/plugins_store`
         }
     }
 
-    const plugin_store = document.querySelector('#plugin_store_btn')
-    plugin_store.onclick = (e) => {
-        //隐藏插件功能模态框
-        const pluginModal = document.querySelector('#PluginModal')
-        pluginModal.style.display = 'none'
+    const initPluginSourceSelect = async (onChange) => {
+        const select = document.querySelector('#plugin_source_select')
+        if (!select) return null
 
-        const plugin_store_close_btn = document.querySelector('#plugin_store_close_btn')
-        plugin_store_close_btn.onclick = () => {
-            closeModal('#plugin_store')
-            setTimeout(() => {
-                showModal('#PluginModal')
-            }, 200);
+        const sources = await fetchPluginSources()
+        pluginStoreSourcesCache = sources
+
+        select.innerHTML = ''
+        sources.forEach(src => {
+            const opt = document.createElement('option')
+            opt.value = src.id
+            const name = src.name || src.id
+            opt.textContent = src.builtIn ? `${name}(${t('built_in') || '内置'})` : name
+            select.appendChild(opt)
+        })
+
+        const storedId = localStorage.getItem(PLUGIN_STORE_SOURCE_ID_KEY)
+        const selectedId = storedId && sources.some(s => s.id == storedId)
+            ? storedId
+            : (sources[0]?.id || null)
+
+        if (selectedId) {
+            select.value = selectedId
+            localStorage.setItem(PLUGIN_STORE_SOURCE_ID_KEY, selectedId)
         }
 
-        showModal('#plugin_store')
+        select.onchange = () => {
+            const id = select.value
+            if (id) localStorage.setItem(PLUGIN_STORE_SOURCE_ID_KEY, id)
+            onChange && onChange(id)
+        }
+
+        return selectedId
+    }
+
+    const createPluginSourceEditorItem = (src = {}, readOnly = false) => {
+        const container = document.createElement('div')
+        container.className = 'plugin-source-item'
+        container.dataset.builtIn = src.builtIn ? '1' : '0'
+        container.dataset.id = src.id || ''
+        container.style.cssText = 'border:1px solid var(--dark-btn-disabled-color);padding:10px;border-radius:10px;margin-bottom:10px;'
+
+        const header = document.createElement('div')
+        header.style.cssText = 'display:flex;gap:10px;align-items:center;'
+
+        const title = document.createElement('strong')
+        title.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+        title.textContent = src.id ? `${src.id}${src.builtIn ? ` (${t('built_in') || '内置'})` : ''}` : (t('plugin_source_new') || 'new')
+
+        const deleteBtn = document.createElement('button')
+        deleteBtn.className = 'btn'
+        deleteBtn.textContent = t('delete')
+        deleteBtn.style.cssText = 'min-width:70px;'
+        if (readOnly) {
+            deleteBtn.disabled = true
+            deleteBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+        }
+        deleteBtn.onclick = () => {
+            if (readOnly) return
+            container.remove()
+        }
+
+        header.appendChild(title)
+        header.appendChild(deleteBtn)
+        container.appendChild(header)
+
+        const fields = document.createElement('div')
+        fields.style.cssText = 'margin-top:8px;display:flex;flex-direction:column;gap:6px;'
+
+        const createField = (labelText, className, value, placeholderText, type = 'text') => {
+            const row = document.createElement('div')
+            row.style.cssText = 'display:flex;gap:10px;align-items:center;'
+            const label = document.createElement('span')
+            label.textContent = labelText
+            label.style.cssText = 'min-width:90px;font-size:.75rem;opacity:.8;'
+            const input = document.createElement('input')
+            input.type = type
+            input.className = className
+            input.value = value || ''
+            input.placeholder = placeholderText || ''
+            input.disabled = readOnly
+            input.style.cssText = 'flex:1;padding:6px 10px;'
+            row.appendChild(label)
+            row.appendChild(input)
+            return row
+        }
+
+        fields.appendChild(createField(t('plugin_source_name') || 'name', 'ps-name', src.name, t('plugin_source_name')))
+        fields.appendChild(createField(t('plugin_source_download_url') || 'download', 'ps-downloadUrl', src.downloadUrl, 'https://.../d/...'))
+        fields.appendChild(createField(t('plugin_source_api_url') || 'api', 'ps-apiUrl', src.apiUrl, 'https://.../api/fs/list'))
+        fields.appendChild(createField(t('plugin_source_path') || 'path', 'ps-path', src.path, '/path'))
+        fields.appendChild(createField(t('plugin_source_password') || 'password', 'ps-password', src.password, '', 'password'))
+        container.appendChild(fields)
+
+        return container
+    }
+
+    const openPluginSourcesModal = async () => {
+        const modal = document.querySelector('#plugin_sources_modal')
+        if (!modal) return
+
+        if (!(await initRequestData())) {
+            createToast(t('toast_please_login'), 'red')
+            return
+        }
+
+        const sources = await fetchPluginSources()
+        const builtIns = sources.filter(s => s.builtIn)
+        const customs = sources.filter(s => !s.builtIn)
+
+        const builtinBlock = document.querySelector('#plugin_sources_builtin_block')
+        const customBlock = document.querySelector('#plugin_sources_custom_block')
+        if (!builtinBlock || !customBlock) return
+
+        builtinBlock.innerHTML = ''
+        customBlock.innerHTML = ''
+
+        if (builtIns.length > 0) {
+            const title = document.createElement('div')
+            title.className = 'title'
+            title.style.cssText = 'font-size:.8rem;margin:6px 0;'
+            title.textContent = t('plugin_source_builtin') || '内置源'
+            builtinBlock.appendChild(title)
+            builtIns.forEach(src => {
+                builtinBlock.appendChild(createPluginSourceEditorItem(src, true))
+            })
+        }
+
+        const customTitle = document.createElement('div')
+        customTitle.className = 'title'
+        customTitle.style.cssText = 'font-size:.8rem;margin:10px 0 6px 0;'
+        customTitle.textContent = t('plugin_source_custom') || '自定义源'
+        customBlock.appendChild(customTitle)
+        customs.forEach(src => {
+            customBlock.appendChild(createPluginSourceEditorItem(src, false))
+        })
+
+        const addBtn = document.querySelector('#plugin_sources_add_btn')
+        addBtn && (addBtn.onclick = (e) => {
+            e.preventDefault()
+            customBlock.appendChild(createPluginSourceEditorItem({
+                id: '',
+                name: '',
+                downloadUrl: '',
+                apiUrl: '',
+                path: '',
+                password: '',
+                builtIn: false,
+            }, false))
+        })
+
+        const saveBtn = document.querySelector('#plugin_sources_save_btn')
+        saveBtn && (saveBtn.onclick = async (e) => {
+            e.preventDefault()
+            try {
+                const payload = []
+                const cards = Array.from(customBlock.querySelectorAll('.plugin-source-item'))
+                    .filter(el => el.dataset.builtIn !== '1')
+
+                cards.forEach(el => {
+                    const id = el.dataset.id || ''
+                    const name = el.querySelector('.ps-name')?.value?.trim() || ''
+                    const downloadUrl = el.querySelector('.ps-downloadUrl')?.value?.trim() || ''
+                    const apiUrl = el.querySelector('.ps-apiUrl')?.value?.trim() || ''
+                    const path = el.querySelector('.ps-path')?.value?.trim() || ''
+                    const password = el.querySelector('.ps-password')?.value?.trim() || ''
+                    if (!downloadUrl) {
+                        return
+                    }
+                    payload.push({
+                        id,
+                        name,
+                        downloadUrl,
+                        apiUrl,
+                        path,
+                        password,
+                    })
+                })
+
+                const res = await (await fetchWithTimeout(`${KANO_baseURL}/plugin_sources`, {
+                    method: 'POST',
+                    body: JSON.stringify({ sources: payload }),
+                }, 10000)).json()
+
+                if (res.result == 'success') {
+                    createToast(t('toast_save_success'), 'green')
+                    closeModal('#plugin_sources_modal')
+                    await initPluginSourceSelect((id) => loadPluginStorePlugins(id))
+                    const select = document.querySelector('#plugin_source_select')
+                    if (select?.value) {
+                        loadPluginStorePlugins(select.value)
+                    }
+                } else {
+                    createToast(t('toast_save_failed') || 'save failed', 'red')
+                }
+            } catch (err) {
+                console.error(err)
+                createToast(t('toast_save_failed') || 'save failed', 'red')
+            }
+        })
+
+        const closeBtn = document.querySelector('#plugin_sources_close_btn')
+        closeBtn && (closeBtn.onclick = (e) => {
+            e.preventDefault()
+            closeModal('#plugin_sources_modal')
+        })
+
+        showModal('#plugin_sources_modal')
+    }
+
+    const loadPluginStorePlugins = (sourceId) => {
         const items = document.querySelector('#plugin_store .plugin-items')
+        if (!items) return
+
         //loading
         items.innerHTML = `
         <li style="padding-top: 15px;overflow:hidden">
@@ -5751,15 +5960,15 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
             </strong>
         </li>
         `
+
         const total = document.querySelector('#plugin_store .total')
-        //加载插件
-        fetchWithTimeout(`${KANO_baseURL}/plugins_store`)
+        fetchWithTimeout(buildPluginStoreUrl(sourceId))
             .then(res => res.json())
             .then(({ res, download_url }) => {
                 const data = res.data || {}
                 items.innerHTML = ''
                 if (data && data.content && data.content.length > 0) {
-                    total.innerHTML = `${t('plugin_modal_num')}: ${data.content.length}`
+                    total && (total.innerHTML = `${t('plugin_modal_num')}: ${data.content.length}`)
                     //分页
                     const pageSize = 10
                     const totalPages = Math.ceil(data.content.length / pageSize)
@@ -5830,7 +6039,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                         }
 
                         //寻找存在的页面页码并跳转
-
                         const cur_index = data.content.findIndex(plugin => {
                             return plugin.name?.toLowerCase()?.includes(keyword?.toLowerCase())
                         })
@@ -5874,7 +6082,51 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 console.error(err)
                 items.innerHTML = `<li style="padding:10px">${t('error_loading_plugins')}</li>`
             })
+    }
 
+    //插件市场
+    const plugin_store_modal = document.querySelector('#plugin_store')
+    plugin_store_modal.onclick = (e) => {
+        e.stopPropagation()
+        const pluginModal = document.querySelector('#PluginModal')
+        const classList = Array.from(e?.target?.classList || [])
+        const id = e.target.id
+        if (classList && classList.includes('mask')) {
+            if (id) {
+                closeModal(`#${id}`);
+                setTimeout(() => {
+                    showModal('#PluginModal')
+                }, 200);
+            }
+        }
+    }
+
+    const plugin_store = document.querySelector('#plugin_store_btn')
+    plugin_store.onclick = async (e) => {
+        //隐藏插件功能模态框
+        const pluginModal = document.querySelector('#PluginModal')
+        pluginModal.style.display = 'none'
+
+        const plugin_store_close_btn = document.querySelector('#plugin_store_close_btn')
+        plugin_store_close_btn.onclick = () => {
+            closeModal('#plugin_store')
+            setTimeout(() => {
+                showModal('#PluginModal')
+            }, 200);
+        }
+
+        showModal('#plugin_store')
+
+        // init plugin source selector + reload on change
+        const selectedId = await initPluginSourceSelect((id) => loadPluginStorePlugins(id))
+        loadPluginStorePlugins(selectedId)
+
+        // plugin source manager
+        const manageBtn = document.querySelector('#plugin_source_manage_btn')
+        manageBtn && (manageBtn.onclick = async (ev) => {
+            ev.preventDefault()
+            await openPluginSourcesModal()
+        })
     }
 
     const handlePluginStoreSearchInput = (e) => {
@@ -6829,6 +7081,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         handleShell,
         handleDownloadSoftwareLink,
         handleUpdateSoftware,
+        openDevMenu,
         enableTTYD,
         changeNetwork,
         changeUSBNetwork,

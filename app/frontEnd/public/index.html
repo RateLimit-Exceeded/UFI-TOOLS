@@ -39,10 +39,12 @@
 <body id="BG">
     <div class="bg" id="BG_OVERLAY">
         <div class="container">
-            <div class="title main-title" onclick="enableTTYD()">
+            <div class="title main-title">
                 <strong id="MAIN_TITLE">UFI-TOOLS</strong>
                 <span style="font-size: 14px;" data-i18n="device"></span>:<strong id="MODEL"
                     style="font-size: 14px;"></strong>
+                <button id="DEV_MENU_BTN" class="btn" data-i18n="dev_menu" style="margin-left:auto;min-width: 90px;"
+                    onclick="openDevMenu(event)">开发菜单</button>
             </div>
             <!-- 操作按钮 -->
             <div class="title" id="collapseBtn_menu"
@@ -1203,6 +1205,11 @@
                             style="color: rgb(255, 162, 0);">请注意，安装插件可能会影响设备性能和稳定性，请谨慎选择。</span><br>
                         <span data-i18n="plugin_store_tip2">有些插件需要开启高级功能才可以使用。</span>
                     </div>
+                    <div class="searchBox" style="margin-bottom: 6px;">
+                        <select class="select" id="plugin_source_select" style="flex: 1;">
+                        </select>
+                        <button id="plugin_source_manage_btn" class="btn" data-i18n="plugin_source_manage">管理插件源</button>
+                    </div>
                     <div class="searchBox">
                         <input onkeyup="handlePluginStoreSearchInput(event)" style="padding-left: 6px;width: 100%;"
                             type="text" placeholder="搜索插件" id="pluginSearchInput"
@@ -1228,6 +1235,27 @@
                             <button id="plugin_store_next_page" data-i18n="next_page">下一页</button>
                         </div>
                         <button id="plugin_store_close_btn" data-i18n="close_btn">关闭</button>
+                    </div>
+                </div>
+            </div>
+            <!-- 插件源管理模态框 -->
+            <div id="plugin_sources_modal" class="mask" style="display: none">
+                <div class="modal"
+                    style="backdrop-filter: none;-webkit-backdrop-filter: none;overflow: visible;width: 90%;max-width: 600px; display: flex;flex-direction: column;">
+                    <div class="title" style="margin-bottom: 10px;"><span
+                            data-i18n="plugin_source_manage_title">插件源管理</span></div>
+                    <div class="title" style="display: block;font-size: .7rem;font-style: italic;margin-bottom: 10px;">
+                        <span data-i18n="plugin_source_tip">支持 AList 直链，推荐填直链（/d/...）和密码，其它字段可选。</span>
+                    </div>
+                    <div class="content" style="max-height: 500px;overflow-y: auto;">
+                        <div id="plugin_sources_builtin_block"></div>
+                        <div id="plugin_sources_custom_block"></div>
+                        <button id="plugin_sources_add_btn" class="btn" data-i18n="add"
+                            style="width: 100%;margin-top: 10px;">添加</button>
+                    </div>
+                    <div class="btn" style="text-align: right;margin-top: 6px;">
+                        <button id="plugin_sources_save_btn" data-i18n="submit_btn">提交</button>
+                        <button id="plugin_sources_close_btn" data-i18n="close_btn">关闭</button>
                     </div>
                 </div>
             </div>

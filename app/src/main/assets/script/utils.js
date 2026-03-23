@@ -617,7 +617,7 @@ Array.from(document.querySelectorAll('.mask'))?.forEach(el => {
         const classList = Array.from(e?.target?.classList || [])
         const id = e.target.id
         //维护一个黑名单，黑名单内的模态框不受影响
-        const blackList = ['updateSoftwareModal', "plugin_store", "APNViewModal", "APNEditModal"]
+        const blackList = ['updateSoftwareModal', "plugin_store", "plugin_sources_modal", "APNViewModal", "APNEditModal"]
         const isCloseable = !blackList.includes(id)
         if (classList && classList.includes('mask') && isCloseable) {
             if (id) {
