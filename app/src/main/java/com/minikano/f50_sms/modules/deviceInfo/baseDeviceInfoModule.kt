@@ -3,7 +3,6 @@ package com.minikano.f50_sms.modules.deviceInfo
 import android.content.Context
 import android.os.StatFs
 import com.minikano.f50_sms.configs.AppMeta
-import com.minikano.f50_sms.configs.AppMeta.isReadUseTerms
 import com.minikano.f50_sms.modules.BASE_TAG
 import com.minikano.f50_sms.modules.PREFS_NAME
 import com.minikano.f50_sms.utils.KanoLog
@@ -28,7 +27,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import androidx.core.content.edit
 
 data class MyStorageInfo(
     val path: String, val totalBytes: Long, val availableBytes: Long
@@ -231,25 +229,6 @@ fun Route.baseDeviceInfoModule(context: Context) {
         }
     }
 
-    post("/api/accept_terms"){
-        try {
-            val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            AppMeta.isReadUseTerms = true
-            sharedPrefs.edit(commit = true) { putString("isReadUseTerms", "true") }
-            val jsonResult = """{"result":"success"}""".trimIndent()
-            call.response.headers.append("Access-Control-Allow-Origin", "*")
-            call.respondText(jsonResult, ContentType.Application.Json)
-        } catch (e: Exception) {
-            KanoLog.d("UFI_TOOLS_LOG", "获取用户协议信息出错：${e.message}")
-            call.response.headers.append("Access-Control-Allow-Origin", "*")
-            call.respondText(
-                """{"error":"获取用户协议信息出错"}""",
-                ContentType.Application.Json,
-                HttpStatusCode.InternalServerError
-            )
-        }
-    }
-
     //版本信息获取
     get("/api/version_info") {
         try {
@@ -257,8 +236,7 @@ fun Route.baseDeviceInfoModule(context: Context) {
             {
                 "app_ver": "${AppMeta.versionName}",
                 "app_ver_code": "${AppMeta.versionCode}",
-                "model":"${AppMeta.model}",
-                "accept_terms":${AppMeta.isReadUseTerms}
+                "model":"${AppMeta.model}"
             }
         """.trimIndent()
 

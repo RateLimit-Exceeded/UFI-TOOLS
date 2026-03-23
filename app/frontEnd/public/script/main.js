@@ -488,7 +488,6 @@ function main_func() {
         initSleepTime()
         initAdvanceTools()
         QOSRDPCommand("AT+CGEQOSRDP=1")
-        initTerms()
         initCheckWeakToken()
         initTTYD()
     }
@@ -5915,69 +5914,10 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     }
     getSELinuxStatus()
 
-    const initTerms = async () => {
-        if (!(await initRequestData())) {
-            return null
-        }
-        // 用户协议
-        const md = createModal({
-            name: "kano_terms",
-            noBlur: true,
-            isMask: true,
-            title: t('useTermsTitle'),
-            contentStyle: "font-size:12px",
-            confirmBtnText: t('accept'),
-            closeBtnText: t('decline'),
-            onClose: () => {
-                createToast(t('please_accept_terms'))
-                return false
-            },
-            onConfirm: () => {
-                const scroll = md.el.querySelector('.content')
-                if ((scroll.scrollTop < scroll.clientHeight) || (scroll.scrollTop < 50)) {
-                    // 哎呀，你怎么又没认真看😯
-                    createToast(t('please_read_terms'))
-                    return false
-                }
-                fetchWithTimeout(`${KANO_baseURL}/accept_terms`, {
-                    method: "post",
-                    headers: common_headers,
-                }).then(r => r.json()).then(res => {
-                    if (res.result == "success") {
-                        createToast(t('accept'))
-                    }
-                }).finally((res) => {
-                    //同意后检查弱口令
-                    initCheckWeakToken()
-                })
-                return true
-            },
-            content: t('useTerms')
-        })
-        const cache = localStorage.getItem('read_terms')
-        try {
-            if (await getTermsAcceptance()) {
-                if (cache != "1") {
-                    localStorage.setItem('read_terms', '1')
-                }
-                return
-            }
-            showModal(md.id)
-        } catch {
-            if (cache != "1" && cache != null && cache != undefined) {
-                showModal(md.id)
-            }
-        }
-    }
-    initTerms()
-
     const initCheckWeakToken = async () => {
+        // 已禁用弱口令弹窗提示（仅保留修改口令功能入口，由用户自行决定是否修改）
+        return null
         if (!(await initRequestData())) {
-            return null
-        }
-
-        // 没同意用户许可就不要显示
-        if (!(await getTermsAcceptance())) {
             return null
         }
 
