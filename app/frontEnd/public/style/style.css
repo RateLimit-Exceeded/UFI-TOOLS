@@ -1192,3 +1192,65 @@ input[type="range"] {
         margin: 6px 0;
     }
 }
+
+.nc-card {
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--dark-card-bg);
+    user-select: none;
+}
+
+.nc-title {
+    font-size: .7rem;
+    opacity: .75;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nc-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    align-items: center;
+}
+
+.nc-label {
+    opacity: .85;
+    font-size: .75rem;
+    white-space: nowrap;
+}
+
+.nc-value {
+    font-variant-numeric: tabular-nums;
+    font-size: .75rem;
+    font-weight: 600;
+    text-align: right;
+    min-width: 72px;
+}
+
+.nc-badge {
+    font-size: .7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--dark-tag-color);
+}
+
+.nc-strong {
+    font-size: .75rem;
+    font-weight: 800;
+    letter-spacing: .2px;
+}
+
+.nc-sub {
+    opacity: .7;
+    font-size: .7rem;
+}
+
+.nc-divider {
+    height: 1px;
+    background: var(--dark-tag-color);
+    margin: 8px 0;
+}

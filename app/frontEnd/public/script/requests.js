@@ -608,3 +608,15 @@ const getSimPinStatus = async () => {
         return null
     }
 }
+
+const getNetConnInfo = async () => {
+    try {
+        const res = await (await fetchWithTimeout(`${KANO_baseURL}/connInfo`)).json()
+        if (res.result == 'success') {
+            return res.data
+        }
+    } catch (e) {
+        console.error("getNetConnInfo Error:", e)
+    }
+    return null
+}

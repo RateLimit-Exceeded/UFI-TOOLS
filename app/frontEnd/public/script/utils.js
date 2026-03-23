@@ -886,6 +886,15 @@ const fillCurl = (kind) => {
             message = t('pushplus_sms_help')
             curl_text.value = `curl -s -X POST https://www.pushplus.plus/send/  -H "Content-Type: application/x-www-form-urlencoded" -d "token=<你的token>&title=有新消息！！&content=**【短信内容】**%0A{{sms-body}}%0A%0A**【时间】**%0A{{sms-time}}%0A%0A**【号码】**%0A{{sms-from}}&template=markdown"`
             break;
+        case 'bark':
+            {
+                const help = t('bark_sms_help')
+                message = (help && help !== 'bark_sms_help')
+                    ? help
+                    : `Bark SMS forwarding: replace <your_token> in URL. Variables: {{sms-from}}, {{sms-body}}, {{sms-time}}.`
+            }
+            curl_text.value = `curl -X \"POST\" \"https://api.day.app/<your_token>/\" -H 'Content-Type: application/json; charset=utf-8' -d '{\"body\":\"{{sms-body}}\\n{{sms-time}}\",\"title\":\"{{sms-from}}\",\"group\":\"UFI-TOOLS_SMS\",\"isArchive\":1}'`
+            break;
     }
 
     const { el, close } = createFixedToast('kano_message', `
@@ -906,6 +915,87 @@ const fillCurl = (kind) => {
         }
     }
 
+}
+
+const renderConnectStatusContent = (res) => {
+    const tx = (key, fallback) => {
+        const v = t(key)
+        return (v && v !== key) ? v : fallback
+    }
+
+    if (!res) {
+        return `<div style="opacity:.7">${tx('toast_request_data_failed', 'No data')}</div>`
+    }
+
+    return `
+      <div style="
+          font-size:.7rem;
+          display:flex;
+          flex-direction:column;
+          gap:10px;
+          line-height:1.4;
+      ">
+          <div class="nc-card">
+          <div class="nc-title">
+              <span>${tx('total_conn_count', 'Total connections')}</span>
+              <span class="nc-badge">All</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+              <div>
+                  <div class="nc-sub">${tx('tcp_conn_total', 'TCP')} / ${tx('udp_conn_total', 'UDP')} / v6</div>
+                  <div class="nc-strong" style="font-size:18px;font-weight:900;">
+                      ${Number(res.tcp) + Number(res.udp) + Number(res.tcp6) + Number(res.udp6)}
+                  </div>
+              </div>
+              <div style="text-align:right">
+              <div class="nc-sub">${tx('unix_conn_total', 'UNIX')}</div>
+              <div class="nc-value" style="font-size:16px;font-weight:800;">${res.unix}</div>
+              </div>
+          </div>
+          </div>
+
+          <div class="nc-card">
+          <div class="nc-title">
+              <span>TCP (v4)</span>
+              <span class="nc-badge">${tx('tcp_conn_total', 'TCP')}</span>
+          </div>
+          <div class="nc-grid">
+              <div class="nc-label">${tx('tcp_conn_active', 'Active')}</div>
+              <div class="nc-value">${res.tcp_active}</div>
+
+              <div class="nc-label">${tx('tcp_conn_other', 'Other')}</div>
+              <div class="nc-value">${res.tcp_other}</div>
+
+              <div class="nc-divider" style="grid-column:1 / -1;"></div>
+
+              <div class="nc-label">${tx('tcp_conn_total', 'Total')}</div>
+              <div class="nc-value">${res.tcp}</div>
+          </div>
+          </div>
+
+          <div class="nc-card">
+          <div class="nc-title">
+              <span>${tx('other_protocols', 'Other protocols')}</span>
+              <span class="nc-badge">UDP / v6</span>
+          </div>
+          <div class="nc-grid">
+              <div class="nc-label">${tx('tcp6_conn_total', 'TCP6')}</div>
+              <div class="nc-value">${res.tcp6}</div>
+
+              <div class="nc-label">${tx('udp_conn_total', 'UDP')}</div>
+              <div class="nc-value">${res.udp}</div>
+
+              <div class="nc-label">${tx('udp6_conn_total', 'UDP6')}</div>
+              <div class="nc-value">${res.udp6}</div>
+
+              <div class="nc-divider" style="grid-column:1 / -1;"></div>
+
+              <div class="nc-label">${tx('unix_conn_total', 'UNIX')}</div>
+              <div class="nc-value">${res.unix}</div>
+          </div>
+          </div>
+      </div>
+      `.trim()
 }
 
 const checkBroswer = () => {

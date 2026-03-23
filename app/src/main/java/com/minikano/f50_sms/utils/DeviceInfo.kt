@@ -5,7 +5,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.File
+import java.io.FileReader
 import java.util.Locale
 
 /*
@@ -306,5 +308,81 @@ suspend fun readUsbDevices(): Pair<Int, String> = withContext(Dispatchers.IO) {
     jsonRoot.put("devices", jsonArray)
 
     return@withContext Pair(maxSpeed, jsonRoot.toString())
+}
+
+// 连接数
+data class NetConnCount(
+    var tcp: Int = -1,
+    var tcpActive: Int = -1,   // ESTABLISHED
+    var tcpOther: Int = -1,    // 其他状态
+    var tcp6: Int = -1,
+    var udp: Int = -1,
+    var udp6: Int = -1,
+    var unix: Int = -1,
+) {
+    val total: Int
+        get() = listOf(tcp, tcp6, udp, udp6, unix).filter { it >= 0 }.sum()
+}
+
+suspend fun readNetConnCount(): NetConnCount = withContext(Dispatchers.IO) {
+    NetConnCount().apply {
+        val tcpPair = countTcpStates("/proc/net/tcp")
+        tcp = tcpPair.first
+        tcpActive = tcpPair.second
+        tcpOther = if (tcp >= 0 && tcpActive >= 0) tcp - tcpActive else -1
+
+        tcp6 = countProcNetLines("/proc/net/tcp6", skipHeader = true)
+        udp = countProcNetLines("/proc/net/udp", skipHeader = true)
+        udp6 = countProcNetLines("/proc/net/udp6", skipHeader = true)
+        unix = countProcNetLines("/proc/net/unix", skipHeader = true)
+    }
+}
+
+private fun countTcpStates(path: String): Pair<Int, Int> {
+    val f = File(path)
+    if (!f.exists()) return -1 to -1
+
+    var total = 0
+    var active = 0
+
+    return try {
+        BufferedReader(FileReader(f), 8 * 1024).use { br ->
+            br.readLine() // header
+            while (true) {
+                val line = br.readLine() ?: break
+                if (line.isEmpty()) continue
+
+                total++
+
+                // 第4列是状态 hex
+                val parts = line.trim().split(Regex("\\s+"))
+                if (parts.size >= 4 && parts[3] == "01") {
+                    active++ // ESTABLISHED
+                }
+            }
+            total to active
+        }
+    } catch (_: Throwable) {
+        -1 to -1
+    }
+}
+
+private fun countProcNetLines(path: String, skipHeader: Boolean): Int {
+    val f = File(path)
+    if (!f.exists()) return -1
+
+    return try {
+        BufferedReader(FileReader(f), 8 * 1024).use { br ->
+            if (skipHeader) br.readLine()
+            var count = 0
+            while (true) {
+                val line = br.readLine() ?: break
+                if (line.isNotEmpty()) count++
+            }
+            count
+        }
+    } catch (_: Throwable) {
+        -1
+    }
 }
 

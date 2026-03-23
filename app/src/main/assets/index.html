@@ -190,7 +190,7 @@
                                     style="max-width: 200px;height: 60px;">
                                     <canvas style="margin-left: -4px;" id="kanoTempChart"></canvas>
                                 </div>
-                                <div class="chart statusCard net-card" style="width: 200px;height: 60px;">
+                                <div class="chart statusCard net-card" style="width: 200px;height: 60px;" onclick="showNetConnInfoModal()">
                                     <canvas style="margin-left: -14px;" id="kanoNetChart"></canvas>
                                 </div>
                             </div>
@@ -1336,7 +1336,6 @@
                                 <button data-i18n="submit_btn" onclick="changeResServer(event)">提交</button>
                             </p>
                             <button onclick="event.preventDefault();resetTTYDPort()">RESET TTYD PORT</button>
-                            <button class="btn" onclick="OP(event)">?</button>
                         </div>
                         <div class="btn" style="text-align: right;margin-top: 6px;">
                             <button type="button" data-i18n="close_btn" onclick="closeModal('#TTYDModal')">关闭</button>
@@ -1756,6 +1755,8 @@
                                             data-i18n="wechat_group">企业微信</button>
                                         <button style="width: 100%;"
                                             onclick="event.preventDefault();fillCurl('pushplus')">PushPlus</button>
+                                        <button style="width: 100%;"
+                                            onclick="event.preventDefault();fillCurl('bark')">Bark</button>
                                     </div>
                                     <div class="item" style="margin: 10px auto;">
                                         <div style="
@@ -1965,48 +1966,10 @@
                 </div>
             </div>
 
-            <!-- ❤️ -->
-            <div class="mask" id="payModal" style="display: none" onclick="handleClosePayModal(event)">
-                <div class="modal">
-                    <div class="title" style="width: 100%;display: flex;justify-content:space-between;"><span
-                            data-i18n="pay_title">打赏作者/群组链接</span>
-                        <button type="button" onclick="onClosePayModal()" data-i18n="pay_btn_dismiss"
-                            style="margin-right: 15px;">不再显示</button>
-                    </div>
-                    <div class="title"
-                        style="display: flex;align-items: center;margin-top: 10px;font-size: 12px;margin-bottom: 10px;">
-                        <div>
-                            <p style="margin: 0; font-style: italic;" data-i18n="pay_tip_1">开发不易，打赏随意～</p>
-                            <p style="margin: 0; font-style: italic;" data-i18n="pay_tip_2">长按赞赏码可保存为图片</p>
-                        </div>
-                    </div>
-                    <div class="title" style="font-size: 14px;display: flex;flex-direction: column;">
-                        <div style="display: flex;flex-wrap: wrap;gap: 10px;justify-content: center;">
-                            <button><a href="https://t.me/ufi_tools_chat" target="_blank" data-i18n="tg_group">点我加入TG群组:
-                                    @ufi_tools_chat</a></button>
-                            <button><a href="https://t.me/ufi_tools" target="_blank" data-i18n="tg_channel">TG频道:
-                                    @ufi_tools</a></button>
-                        </div>
-                        <button onclick="copyText(event)"><a
-                                href="https://link.trustwallet.com/send?coin=60&address=0xdf0503f26D83214d1D4895fC13E8913f52F47607&token_id=0xdAC17F958D2ee523a2206206994597C13D831ec7">USDT</a>
-                            0xdf0503f26D83214d1D4895fC13E8913f52F47607</button>
-
-                    </div>
-                    <div class="donate_content"
-                        style="display: flex; flex-direction: row; justify-content: space-between; padding: 15px; width: 66vw; max-width: 400px; flex-wrap: wrap;">
-                        <img src="https://api.kanokano.cn/pay/zsm.png"
-                            style="width: 48%; height: auto; border-radius: 20px;"
-                            onerror="this.onerror=null; this.src='/img/zsm.png'" alt="">
-                        <img src="/img/qq_group.png" style="width: 48%; height: auto; border-radius: 20px;"
-                            onerror="this.onerror=null; this.src='/img/zsm.webp'" alt="">
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     <div class="footer">
-        <p>Made by <a href="https://github.com/kanoqwq/UFI-TOOLS" target="_blank">MiniKano</a> with love ❤️&nbsp;<a
-                href="javascript:;" onclick="showModal('#payModal')" data-i18n="pay_title">打赏作者</a></p>
+        <p>Made by <a href="https://github.com/kanoqwq/UFI-TOOLS" target="_blank">MiniKano</a> with love ❤️</p>
     </div>
 
     <div class="toolbar">
