@@ -181,7 +181,7 @@ suspend fun readThermalZones(): Pair<Int, String> = withContext(Dispatchers.IO) 
             try {
                 val sensorType = typeFile.readText().trim()
                 val tempValue = tempFile.readText().trim().toIntOrNull() ?: -1
-                if (tempValue >= 0 && sensorType.isNotEmpty()) {
+                if (tempValue <= 124 * 1000 && tempValue >= 0 && sensorType.isNotEmpty()) {
                     zones.add(ThermalZone(sensorType, tempValue))
                 }
             } catch (_: Exception) { }

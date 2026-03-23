@@ -105,6 +105,7 @@ fun Route.baseDeviceInfoModule(context: Context) {
 
         //存储与日流量获取
         var dailyDataRes: Long? = null
+        var monthlyDataRes: Long? = null
         var availableSizeRes: Long? = null
         var usedSizeRes: Long? = null
         var totalSizeRes: Long? = null
@@ -121,6 +122,7 @@ fun Route.baseDeviceInfoModule(context: Context) {
 
             // 获取日用流量
             val dailyData = KanoUtils.getCachedTodayUsage(context)
+            val monthlyData = KanoUtils.getCachedMonthlyUsage(context)
 
             // 外部存储（可移动设备）
             val exStorageInfo = KanoUtils.getCachedRemovableStorageInfo(context)
@@ -133,6 +135,7 @@ fun Route.baseDeviceInfoModule(context: Context) {
             KanoLog.d(TAG, "外部存储：$externalAvailable/$externalTotal")
 
             dailyDataRes = dailyData
+            monthlyDataRes = monthlyData
             availableSizeRes = availableSize
             usedSizeRes = usedSize
             totalSizeRes = totalSize
@@ -143,6 +146,7 @@ fun Route.baseDeviceInfoModule(context: Context) {
         } catch (e: Exception) {
             KanoLog.d(TAG, "存储与日流量信息出错： ${e.message}")
             dailyDataRes = null
+            monthlyDataRes = null
             availableSizeRes = null
             usedSizeRes = null
             totalSizeRes = null
@@ -187,6 +191,7 @@ fun Route.baseDeviceInfoModule(context: Context) {
                 "model": "$modelRes",
                 "battery": "$batteryLevelRes",
                 "daily_data": $dailyDataRes,
+                "monthly_data": $monthlyDataRes,
                 "internal_available_storage": $availableSizeRes,
                 "internal_used_storage": $usedSizeRes,
                 "internal_total_storage": $totalSizeRes,

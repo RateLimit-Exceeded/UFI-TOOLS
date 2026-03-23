@@ -1021,6 +1021,8 @@
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button class="btn" onclick="fillAction(event,'指示灯')" data-i18n="action_led">指示灯</button>
                             <button class="btn" onclick="fillAction(event,'NFC')" data-i18n="action_nfc">NFC</button>
+                            <button class="btn" onclick="fillAction(event,'转发设备信息')"
+                                data-i18n="action_forward_device_info">转发设备信息</button>
                             <button class="btn" onclick="fillAction(event,'文件共享')"
                                 data-i18n="action_fileshare">文件共享</button>
                             <button class="btn" onclick="fillAction(event,'网络漫游')"
@@ -1727,6 +1729,11 @@
                                                 id="smtp_to" name="smtp_to" type="email"
                                                 placeholder="to@xxx.com"></label>
                                     </div>
+                                    <div class="item" style="margin: 10px auto;">
+                                        <label style="display: flex;align-items: center;"><span
+                                                data-i18n="forward_dev_info_text">同时转发设备信息：</span><input
+                                                name="forward_dev_info" type="checkbox" class="checkbox"></label>
+                                    </div>
                                 </div>
                                 <div class="btn" style="text-align: right;">
                                     <button type="submit" data-i18n="submit_btn">提交</button>
@@ -1747,6 +1754,13 @@
                                             短信内容占位符：</span>
                                         <span onclick="copyText(event)">{{sms-body}} {{sms-time}}
                                             {{sms-from}}</span>
+                                        <br>
+                                        <span onclick="copyText(event)">
+                                            {{daily-flow}} {{cpu-temp}} {{cpu-usage}} {{mem-usage}} {{app-ver}}
+                                            {{battery-level}}
+                                            {{battery-current}} {{battery-voltage}} {{model}} {{boot-time}}
+                                            {{monthly-flow-count}} {{monthly-flow-sum}}
+                                        </span>
                                     </div>
                                     <div style="display: flex;gap: 10px;margin-top: 10px;">
                                         <button style="width: 100%;"
@@ -1804,6 +1818,11 @@
                                                 style="flex: 1;padding: 4px 6px;width: 100%;" id="dingtalk_secret"
                                                 name="dingtalk_secret" type="text"
                                                 placeholder="SEC000000000000000000000" optional></label>
+                                    </div>
+                                    <div class="item" style="margin: 10px auto;">
+                                        <label style="font-size: 14px;display: flex;align-items: center;"><span
+                                                data-i18n="forward_dev_info_text">同时转发设备信息：</span><input
+                                                name="forward_dev_info" type="checkbox" class="checkbox"></label>
                                     </div>
                                 </div>
                                 <div class="btn" style="text-align: right;">

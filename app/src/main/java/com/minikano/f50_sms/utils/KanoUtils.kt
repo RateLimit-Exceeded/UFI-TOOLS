@@ -15,9 +15,14 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import com.minikano.f50_sms.ADBService.Companion.isExecutingDisabledFOTA
+import com.minikano.f50_sms.configs.AppMeta
 import com.minikano.f50_sms.modules.deviceInfo.MyStorageInfo
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -64,6 +69,21 @@ class KanoUtils {
         }
 
         //获取电池电量
+        fun Long.toReadableSize(decimals: Int = 2): String {
+            if (this <= 0) return "0 B"
+
+            val units = arrayOf("B", "KB", "MB", "GB", "TB", "PB", "EB")
+            var value = this.toDouble()
+            var idx = 0
+
+            while (value >= 1024 && idx < units.size - 1) {
+                value /= 1024
+                idx++
+            }
+
+            return "%.${decimals}f%s".format(value, units[idx])
+        }
+
         fun getBatteryPercentage(context: Context): Int {
             val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
             val batteryStatus = context.registerReceiver(null, filter) ?: return -1
@@ -106,6 +126,16 @@ class KanoUtils {
             return cal.timeInMillis
         }
 
+        fun getStartOfMonthMillis(): Long {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            return cal.timeInMillis
+        }
+
         fun getTodayDataUsage(
             context: Context,
         ): Long {
@@ -130,6 +160,27 @@ class KanoUtils {
         }
 
         // 解析 URL 编码的请求体
+        fun getMonthlyDataUsage(context: Context): Long {
+            val networkStatsManager =
+                context.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
+
+            val startTime = getStartOfMonthMillis()
+            val endTime = System.currentTimeMillis()
+
+            var totalBytes = 0L
+
+            try {
+                val summary = networkStatsManager.querySummaryForDevice(
+                    ConnectivityManager.TYPE_MOBILE, null, startTime, endTime
+                )
+                totalBytes = summary.rxBytes + summary.txBytes
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            return totalBytes
+        }
+
         fun parseUrlEncoded(data: String): Map<String, String> {
             val params = mutableMapOf<String, String>()
             val pairs = data.split("&")
@@ -407,6 +458,9 @@ class KanoUtils {
             val connection = url.openConnection() as HttpURLConnection
             return try {
                 connection.requestMethod = "GET"
+                connection.connectTimeout = 1500
+                connection.readTimeout = 1500
+                connection.instanceFollowRedirects = false
                 connection.connect()
                 connection.responseCode // 返回状态码
             } catch (e: Exception) {
@@ -427,6 +481,164 @@ class KanoUtils {
                 lastUpdate = now
             }
             return cachedTotal
+        }
+
+        private var cachedMonthlyTotal = 0L
+        private var lastMonthlyUpdate = 0L
+        fun getCachedMonthlyUsage(context: Context): Long {
+            val now = System.currentTimeMillis()
+            if (now - lastMonthlyUpdate > 10_000) { // 每 10 秒更新一次
+                cachedMonthlyTotal = getMonthlyDataUsage(context)
+                lastMonthlyUpdate = now
+            }
+            return cachedMonthlyTotal
+        }
+
+        private var cachedOfficialMonthlyFlow: Long = 0L
+        private var lastOfficialMonthlyFlowUpdate = 0L
+        fun getCatchedFlowMonth(context: Context): Long {
+            val now = System.currentTimeMillis()
+            if (now - lastOfficialMonthlyFlowUpdate > 10_000) { // 每 10 秒更新一次
+                try {
+                    runBlocking {
+                        val sharedPrefs =
+                            context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+                        val adbIp =
+                            sharedPrefs.getString("gateway_ip", "")?.substringBefore(":").orEmpty()
+                        if (adbIp.isBlank()) throw Exception("gateway_ip is empty")
+
+                        val req = KanoGoformRequest("http://$adbIp:8080")
+                        val result = req.getData(mapOf("cmd" to "monthly_rx_bytes,monthly_tx_bytes"))
+
+                        val rx = result?.optLong("monthly_rx_bytes", Long.MIN_VALUE) ?: Long.MIN_VALUE
+                        val tx = result?.optLong("monthly_tx_bytes", Long.MIN_VALUE) ?: Long.MIN_VALUE
+                        if (rx == Long.MIN_VALUE || tx == Long.MIN_VALUE) {
+                            throw Exception("monthly_rx_bytes/monthly_tx_bytes missing")
+                        }
+
+                        cachedOfficialMonthlyFlow = rx + tx
+                    }
+                } catch (e: Exception) {
+                    Log.e("UFI_TOOLS_LOG", "query monthly flow failed: ${e.message}")
+                }
+                lastOfficialMonthlyFlowUpdate = now
+            }
+            return cachedOfficialMonthlyFlow
+        }
+
+        fun buildStatusSmsMsg(text: String, context: Context, TAG: String): String {
+            if (text.isBlank()) return text
+
+            var replacedText = text
+            runBlocking {
+                try {
+                    val templates = listOf(
+                        "{{cpu-usage}}",
+                        "{{mem-usage}}",
+                        "{{app-ver}}",
+                        "{{battery-level}}",
+                        "{{battery-current}}",
+                        "{{battery-voltage}}",
+                        "{{model}}",
+                        "{{boot-time}}",
+                        "{{cpu-temp}}",
+                        "{{daily-flow}}",
+                        "{{monthly-flow-count}}",
+                        "{{monthly-flow-sum}}",
+                    )
+
+                    if (replacedText.contains(templates[0])) {
+                        val usage = calculateCpuUsage()
+                        val cpuUsageRes = Json.parseToJsonElement(usage)
+                            .jsonObject["cpu"]
+                            ?.jsonPrimitive
+                            ?.double
+                        replacedText = replacedText.replace(templates[0], "${cpuUsageRes}%")
+                    }
+
+                    if (replacedText.contains(templates[1])) {
+                        val mem = getMemoryUsage()
+                        val memUsageRes = Json.parseToJsonElement(mem)
+                            .jsonObject["mem_usage_percent"]
+                            ?.jsonPrimitive
+                            ?.double
+                        replacedText = replacedText.replace(templates[1], "${memUsageRes}%")
+                    }
+
+                    if (replacedText.contains(templates[2])) {
+                        replacedText = replacedText.replace(templates[2], AppMeta.versionName)
+                    }
+
+                    if (replacedText.contains(templates[3])) {
+                        val batteryLevel: Int = KanoUtils.getBatteryPercentage(context)
+                        replacedText = replacedText.replace(templates[3], "$batteryLevel%")
+                    }
+
+                    if (replacedText.contains(templates[4]) || replacedText.contains(templates[5])) {
+                        val batteryStatus = readBatteryStatus()
+                        if (replacedText.contains(templates[4])) {
+                            replacedText = replacedText.replace(
+                                templates[4],
+                                "${batteryStatus.current_uA / 1000}mA"
+                            )
+                        }
+                        if (replacedText.contains(templates[5])) {
+                            val voltageText =
+                                String.format("%.2f", batteryStatus.voltage_uV / 1_000_000.0)
+                            replacedText = replacedText.replace(templates[5], "${voltageText}V")
+                        }
+                    }
+
+                    if (replacedText.contains(templates[6])) {
+                        replacedText = replacedText.replace(templates[6], AppMeta.model)
+                    }
+
+                    if (replacedText.contains(templates[7])) {
+                        try {
+                            val result = sendShellCmd("cut -d. -f1 /proc/uptime")
+                            if (!result.done) throw Exception(result.content)
+                            val time = result.content.toLongOrNull()
+                                ?.takeIf { it >= 0 }
+                                ?.let { "%.2f".format(it / 3600.0) }
+                                ?: "Unknown"
+                            replacedText = replacedText.replace(templates[7], "${time}h")
+                        } catch (e: Exception) {
+                            KanoLog.e(TAG, "query boot time failed: ${e.message}")
+                        }
+                    }
+
+                    if (replacedText.contains(templates[8])) {
+                        val (maxTemp) = readThermalZones()
+                        val temp = maxTemp
+                            .takeIf { it >= 0 }
+                            ?.let { "%.2f".format(it / 1000.0) }
+                            ?: "Unknown"
+                        replacedText = replacedText.replace(templates[8], "${temp}°C")
+                    }
+
+                    if (replacedText.contains(templates[9])) {
+                        val dailyData = getCachedTodayUsage(context)
+                        replacedText = replacedText.replace(templates[9], dailyData.toReadableSize())
+                    }
+
+                    if (replacedText.contains(templates[10])) {
+                        val monthlyData = getCachedMonthlyUsage(context)
+                        replacedText =
+                            replacedText.replace(templates[10], monthlyData.toReadableSize())
+                    }
+
+                    if (replacedText.contains(templates[11])) {
+                        replacedText = replacedText.replace(
+                            templates[11],
+                            getCatchedFlowMonth(context).toReadableSize()
+                        )
+                    }
+                } catch (e: Exception) {
+                    KanoLog.e(TAG, "buildStatusSmsMsg failed: ${e.message}")
+                }
+            }
+
+            return replacedText
         }
 
         fun getSELinuxStatus(): String {

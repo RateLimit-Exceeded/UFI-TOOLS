@@ -229,6 +229,33 @@ class TaskScheduler(
                     scope.launch {
                         if (!scope.isActive) return@launch //避免任务在已停止调度器中执行
                         try {
+                            if (saved.actionMap["kano_do_sms_forward_action"] == "1") {
+                                val sharedPrefs =
+                                    context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+                                val smsForwardSwitch =
+                                    sharedPrefs.getString("kano_sms_forward_enabled", "0") ?: "0"
+
+                                KanoLog.d("UFI_TOOLS_LOG_TaskScheduler", "kano_sms_forward_enabled:$smsForwardSwitch")
+
+                                if (smsForwardSwitch != "0") {
+                                    val smsForwardMethod =
+                                        sharedPrefs.getString("kano_sms_forward_method", "") ?: ""
+
+                                    val fakeSms = SmsInfo(
+                                        address = saved.id,
+                                        body = saved.id,
+                                        timestamp = System.currentTimeMillis()
+                                    )
+
+                                    when (smsForwardMethod) {
+                                        "SMTP" -> SmsPoll.forwardByEmail(fakeSms, context, true)
+                                        "CURL" -> SmsPoll.forwardSmsByCurl(fakeSms, context)
+                                        "DINGTALK" -> SmsPoll.forwardSmsByDingTalk(fakeSms, context, true)
+                                    }
+                                }
+                                return@launch
+                            }
+
                             val req = KanoGoformRequest("http://$ADB_IP:8080")
                             val cookie = req.login(ADMIN_PWD)
                             if (cookie != null) {

@@ -14,6 +14,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import org.json.JSONObject
+import androidx.core.content.edit
 
 fun Route.smsModule(context: Context) {
     val TAG = "[$BASE_TAG]_smsModule"
@@ -44,6 +45,7 @@ fun Route.smsModule(context: Context) {
             val smtpTo = json.optString("smtp_to", "").trim()
             val smtpUsername = json.optString("smtp_username", "").trim()
             val smtpPassword = json.optString("smtp_password", "").trim()
+            val shouldForwardDeviceInfo = json.optString("forward_dev_info", "0").trim()
 
             if (smtpTo.isEmpty() || smtpHost.isEmpty() || smtpUsername.isEmpty() || smtpPassword.isEmpty()) {
                 throw Exception("缺少必要参数")
@@ -51,14 +53,15 @@ fun Route.smsModule(context: Context) {
 
             val sharedPrefs =
                 context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-            sharedPrefs.edit().apply {
+            sharedPrefs.edit(commit = true) {
                 putString("kano_sms_forward_method", "SMTP")
                 putString("kano_smtp_host", smtpHost)
                 putString("kano_smtp_port", smtpPort)
                 putString("kano_smtp_to", smtpTo)
                 putString("kano_smtp_username", smtpUsername)
                 putString("kano_smtp_password", smtpPassword)
-            }.commit()
+                putString("kano_smtp_forward_device_info", shouldForwardDeviceInfo)
+            }
 
             KanoLog.d(TAG, "SMTP配置已保存：$smtpHost:$smtpPort [$smtpUsername]")
 
@@ -93,6 +96,7 @@ fun Route.smsModule(context: Context) {
         val smtpTo = sharedPrefs.getString("kano_smtp_to", "") ?: ""
         val username = sharedPrefs.getString("kano_smtp_username", "") ?: ""
         val password = sharedPrefs.getString("kano_smtp_password", "") ?: ""
+        val shouldForwardDeviceInfo = sharedPrefs.getString("kano_smtp_forward_device_info", "0") ?: "0"
 
         val json = """
         {
@@ -100,7 +104,8 @@ fun Route.smsModule(context: Context) {
             "smtp_port": "$smtpPort",
             "smtp_to": "$smtpTo",
             "smtp_username": "$username",
-            "smtp_password": "$password"
+            "smtp_password": "$password",
+            "forward_dev_info":"$shouldForwardDeviceInfo"
         }
     """.trimIndent()
 
@@ -179,9 +184,9 @@ fun Route.smsModule(context: Context) {
 
             val sharedPrefs =
                 context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-            sharedPrefs.edit().apply {
+            sharedPrefs.edit(commit = true) {
                 putString("kano_sms_forward_enabled", enable)
-            }.commit()
+            }
 
             call.response.headers.append("Access-Control-Allow-Origin", "*")
             call.respondText(
@@ -231,6 +236,7 @@ fun Route.smsModule(context: Context) {
             val json = JSONObject(body)
 
             val webhookUrl = json.optString("webhook_url", "").trim()
+            val shouldForwardDeviceInfo = json.optString("forward_dev_info", "0").trim()
             val secret = json.optString("secret", "").trim()
 
             if (webhookUrl.isEmpty()) {
@@ -240,11 +246,12 @@ fun Route.smsModule(context: Context) {
             // 存储到 SharedPreferences
             val sharedPrefs =
                 context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-            sharedPrefs.edit().apply {
+            sharedPrefs.edit(commit = true) {
                 putString("kano_sms_forward_method", "DINGTALK")
                 putString("kano_dingtalk_webhook", webhookUrl)
                 putString("kano_dingtalk_secret", secret)
-            }.commit()
+                putString("kano_dingtalk_forward_device_info", shouldForwardDeviceInfo)
+            }
 
             KanoLog.d(TAG, "钉钉配置已保存：$webhookUrl")
 
@@ -277,11 +284,14 @@ fun Route.smsModule(context: Context) {
 
         val webhookUrl = sharedPrefs.getString("kano_dingtalk_webhook", "") ?: ""
         val secret = sharedPrefs.getString("kano_dingtalk_secret", "") ?: ""
+        val shouldForwardDeviceInfo =
+            sharedPrefs.getString("kano_dingtalk_forward_device_info", "0") ?: "0"
 
         val json = """
         {
             "webhook_url": "$webhookUrl",
-            "secret": "$secret"
+            "secret": "$secret",
+            "forward_dev_info":"$shouldForwardDeviceInfo"
         }
     """.trimIndent()
 

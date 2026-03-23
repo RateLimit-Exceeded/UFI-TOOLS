@@ -220,6 +220,10 @@ function main_func() {
                 "isShow": true
             },
             {
+                "name": "monthly_data",
+                "isShow": true
+            },
+            {
                 "name": "current_now",
                 "isShow": true
             },
@@ -1012,6 +1016,7 @@ function main_func() {
                 voltage_now: `${notNullOrundefinedOrIsShow(res, 'voltage_now') && (res.battery_value != '' || res.battery_vol_percent != '') ? `<strong onclick="copyText(event)"  class="blue">${t('battery_voltage')}：${(res.voltage_now / 1000000).toFixed(3)} V</strong>` : ''}`,
                 realtime_rx_thrpt: `${notNullOrundefinedOrIsShow(res, 'realtime_tx_thrpt') || notNullOrundefinedOrIsShow(res, 'realtime_rx_thrpt') ? `<strong onclick="copyText(event)" class="blue">${t("current_network_speed")}: <span style="text-align:center;white-space:nowrap;overflow:hidden;display:inline-block;width: 14ch;">⬇️&nbsp;${formatBytes(Number((res.realtime_rx_thrpt)))}/S</span><span style="white-space:nowrap;overflow:hidden;text-align:center;display:inline-block;width: 14ch;font-weight:bolder">⬆️&nbsp;${formatBytes(Number((res.realtime_tx_thrpt)))}/S</span></strong>` : ''}`,
             }
+            statusHtml_base.monthly_data = `${notNullOrundefinedOrIsShow(res, 'monthly_data') ? `<strong onclick="copyText(event)"  class="blue">${t('monthly_data')}：${formatBytes(res.monthly_data)}</strong>` : ''}`
             let statusHtml_net = {
                 lte_rsrp: notNullOrundefinedOrIsShow(res, 'lte_rsrp') ? `<strong onclick="copyText(event)" class="green">${t('4g_rsrp')}：${kano_parseSignalBar(res.lte_rsrp)}</strong>` : '',
                 Lte_snr: notNullOrundefinedOrIsShow(res, 'Lte_snr') ? `<strong onclick="copyText(event)" class="blue">${t('4g_sinr')}：${kano_parseSignalBar(res.Lte_snr, -10, 30, 13, 0)}</strong>` : '',
@@ -4154,7 +4159,7 @@ function main_func() {
                 method: 'GET',
                 headers: common_headers
             })).json()
-            const { smtp_host, smtp_port, smtp_username, smtp_password, smtp_to } = data
+            const { smtp_host, smtp_port, smtp_username, smtp_password, smtp_to, forward_dev_info } = data
             const smtpHostEl = document.querySelector('#smtp_host')
             const smtpPortEl = document.querySelector('#smtp_port')
             const smtpToEl = document.querySelector('#smtp_to')
@@ -4165,6 +4170,8 @@ function main_func() {
             smtpUsernameEl.value = smtp_username || ''
             smtpPasswordEl.value = smtp_password || ''
             smtpToEl.value = smtp_to || ''
+            const forwardDevInfoEl = document.querySelector('#smsForwardForm input[name="forward_dev_info"]')
+            if (forwardDevInfoEl) forwardDevInfoEl.checked = forward_dev_info == "1"
             needSwitch && switchSmsForwardMethodTab({ target: document.querySelector('#smtp_btn') })
         } else if (method.toLowerCase() == 'curl') {
             //获取模态框数据
@@ -4182,11 +4189,13 @@ function main_func() {
                 method: 'GET',
                 headers: common_headers
             })).json()
-            const { webhook_url, secret } = data
+            const { webhook_url, secret, forward_dev_info } = data
             const webhookEl = document.querySelector('#dingtalk_webhook')
             const secretEl = document.querySelector('#dingtalk_secret')
             webhookEl.value = webhook_url || ''
             secretEl.value = secret || ''
+            const forwardDevInfoEl = document.querySelector('#smsForwardDingTalkForm input[name="forward_dev_info"]')
+            if (forwardDevInfoEl) forwardDevInfoEl.checked = forward_dev_info == "1"
             needSwitch && switchSmsForwardMethodTab({ target: document.querySelector('#dingtalk_btn') })
         } else {
             needSwitch && switchSmsForwardMethodTab({ target: document.querySelector('#smtp_btn') })
@@ -4269,6 +4278,7 @@ function main_func() {
         const smtp_to = formData.get('smtp_to')
         const smtp_username = formData.get('smtp_username')
         const smtp_password = formData.get('smtp_password')
+        const forward_dev_info = formData.get('forward_dev_info') ? '1' : '0'
 
         if (!smtp_host || smtp_host.trim() == '') return createToast(t('toast_please_input_smtp_host'), 'red')
         if (!smtp_port || smtp_port.trim() == '') return createToast(t('toast_please_input_smtp_port'), 'red')
@@ -4289,7 +4299,8 @@ function main_func() {
                     smtp_port: smtp_port.trim(),
                     smtp_username: smtp_username.trim(),
                     smtp_password: smtp_password.trim(),
-                    smtp_to: smtp_to.trim()
+                    smtp_to: smtp_to.trim(),
+                    forward_dev_info
                 })
             })).json()
             if (res.result == 'success') {
@@ -4355,6 +4366,7 @@ function main_func() {
         const formData = new FormData(form);
         const webhook_url = formData.get('dingtalk_webhook')
         const secret = formData.get('dingtalk_secret')
+        const forward_dev_info = formData.get('forward_dev_info') ? '1' : '0'
 
         console.log('钉钉表单数据:', { webhook_url, secret })
 
@@ -4371,6 +4383,7 @@ function main_func() {
                 body: JSON.stringify({
                     webhook_url: webhook_url.trim(),
                     secret: secret.trim(),
+                    forward_dev_info
                 })
             })).json()
             if (res.result == 'success') {
@@ -4880,6 +4893,9 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         e.preventDefault()
         //动作列表
         const actionList = {
+            "转发设备信息": {
+                "kano_do_sms_forward_action": "1"
+            },
             "指示灯": {
                 "goformId": "INDICATOR_LIGHT_SETTING",
                 "indicator_light_switch": `${t('one_or_zero_prompt')}`
