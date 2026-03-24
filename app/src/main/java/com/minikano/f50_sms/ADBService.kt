@@ -6,24 +6,32 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.minikano.f50_sms.configs.AppMeta
+import com.minikano.f50_sms.utils.BatteryReceiver
 import com.minikano.f50_sms.utils.KanoLog
+import com.minikano.f50_sms.utils.KanoReport.Companion.reportToServer
 import com.minikano.f50_sms.utils.KanoUtils
-import com.minikano.f50_sms.utils.RootShell
+import com.minikano.f50_sms.utils.KanoUtils.Companion.isUsbDebuggingEnabled
 import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.ShellKano.Companion.executeShellFromAssetsSubfolderWithArgs
 import com.minikano.f50_sms.utils.ShellKano.Companion.killProcessByName
 import com.minikano.f50_sms.utils.SmbThrottledRunner
+import com.minikano.f50_sms.utils.SmsInfo
 import com.minikano.f50_sms.utils.SmsPoll
 import com.minikano.f50_sms.utils.TaskSchedulerManager
-import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
-import kotlin.concurrent.thread
+import java.util.concurrent.TimeUnit
 
 class ADBService : Service() {
     private lateinit var runnable: Runnable
@@ -32,6 +40,9 @@ class ADBService : Service() {
     private val adbExecutor = Executors.newSingleThreadExecutor()
     private val iperfExecutor = Executors.newSingleThreadExecutor()
     private var disableFOTATimes = 3
+
+    private  val TAG = "UFI_TOOLS_LOG_ADBService"
+    private lateinit var batteryReceiver: BatteryReceiver
 
     companion object {
         @Volatile
@@ -54,15 +65,70 @@ class ADBService : Service() {
             // 等文件拷贝完成后再继续
             startAdbKeepAliveTask(applicationContext)
             startIperfTask(applicationContext)
-            val executor = Executors.newFixedThreadPool(2)
+            val executor = Executors.newFixedThreadPool(3)
             executor.execute(runnableSMS)
             executor.execute(runnableSMB)
+            executor.execute(runnableRPT)
         }
 
         //开启定时任务
         TaskSchedulerManager.init(applicationContext)
-
+        //订阅电池事件接收器
+        registerBatteryReceiver()
         return START_STICKY
+    }
+
+    private fun registerBatteryReceiver(){
+        batteryReceiver = BatteryReceiver(onLowBattery = {
+            val sharedPrefs = getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            if (sharedPrefs.getString("kano_sms_forward_enabled", "0") == "1") {
+                //low battery
+                KanoUtils.forwardBatteryStatusMessage(this,SmsInfo("UFI-TOOLS 电源监测",
+                    """
+                    ${AppMeta.model}剩余电量低（10%），请及时充电~
+                    Battery low (10%). Please charge your device.
+                    """.trimIndent(), System.currentTimeMillis()))
+            }
+        },
+        onVeryLowBattery = {
+            val sharedPrefs = getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            if (sharedPrefs.getString("kano_sms_forward_enabled", "0") == "1") {
+                //low battery
+                KanoUtils.forwardBatteryStatusMessage(this,SmsInfo("UFI-TOOLS 电源监测",
+                    """
+                ${AppMeta.model}剩余电量过低（5%），请及时充电~
+                Battery is very low (5%). Please charge your device.
+                """.trimIndent(), System.currentTimeMillis()))
+            }
+        },
+        onFullBattery = {
+            val sharedPrefs = getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            if (sharedPrefs.getString("kano_sms_forward_enabled", "0") == "1") {
+                //low battery
+                KanoUtils.forwardBatteryStatusMessage(this,SmsInfo("UFI-TOOLS 电源监测",
+                    """
+                    ${AppMeta.model}电量已充满~
+                    ${AppMeta.model} is fully charged.
+                    """.trimIndent(), System.currentTimeMillis()))
+            }
+        },
+        onCharge = {
+            val sharedPrefs = getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            if (sharedPrefs.getString("kano_sms_forward_enabled", "0") == "1") {
+                //low battery
+                KanoUtils.forwardBatteryStatusMessage(this,SmsInfo("UFI-TOOLS 电源监测",
+                    """
+                    ${AppMeta.model}已插入电源~
+                    ${AppMeta.model} power connected.
+                    """.trimIndent(), System.currentTimeMillis()))
+            }
+        },)
+
+        registerReceiver(
+            batteryReceiver,
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        )
+        Log.d(TAG, "BatteryReceiver 已注册")
     }
 
     private fun resetFilesFromAssets(context: Context) {
@@ -78,9 +144,9 @@ class ADBService : Service() {
         // 复制 assets 中的所有文件
         try {
             KanoUtils.copyAssetsRecursively(context, "shell", context.filesDir)
-            Log.d("kano_ZTE_LOG", "已初始化 files 目录")
+            Log.d(TAG, "已初始化 files 目录")
         } catch (e: Exception) {
-            Log.e("kano_ZTE_LOG", "初始化 files 目录失败:${e.message}")
+            Log.e(TAG, "初始化 files 目录失败:${e.message}")
         }
     }
 
@@ -91,20 +157,45 @@ class ADBService : Service() {
                 try {
                     SmsPoll.checkNewSmsAndSend(applicationContext)
                 } catch (e: Exception) {
-                    KanoLog.e("kano_ZTE_LOG", "读取短信时发生错误", e)
+                    KanoLog.e(TAG, "读取短信时发生错误", e)
                 }
             }
             handler.postDelayed(this, 5000)
         }
     }
 
+    private val rptScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile
+    private var rptRunning = false
+    private val runnableRPT = object : Runnable {
+        override fun run() {
+            if (rptRunning) {
+                KanoLog.w(TAG, "上一次 RPT 还未完成，跳过本次")
+            } else {
+                rptScope.launch {
+                    rptRunning = true
+                    try {
+                        KanoLog.d(TAG, "周期性发送状态中...")
+                        reportToServer()
+                    } catch (e: Exception) {
+                        KanoLog.e(TAG, "发送状态时发生错误：", e)
+                    } finally {
+                        rptRunning = false
+                    }
+                }
+            }
+            handler.postDelayed(this, TimeUnit.HOURS.toMillis(5))
+        }
+    }
+
     private val runnableSMB = object : Runnable {
         override fun run() {
             try {
-                KanoLog.d("kano_ZTE_LOG", "激活SMB内置脚本中...")
+                KanoLog.d(TAG, "激活SMB内置脚本中...")
                 SmbThrottledRunner.runOnceInThread(applicationContext)
             } catch (e: Exception) {
-                KanoLog.e("kano_ZTE_LOG", "激活SMB内置脚本错误")
+                KanoLog.e(TAG, "激活SMB内置脚本错误")
             }
             handler.postDelayed(this, 20_000)
         }
@@ -113,7 +204,7 @@ class ADBService : Service() {
     private fun startIperfTask(context: Context){
         iperfExecutor.execute {
             try{
-                KanoLog.d("kano_ZTE_LOG", "iperf3启动中...")
+                KanoLog.d(TAG, "iperf3启动中...")
                 killProcessByName("iperf3")
                 val result =
                     executeShellFromAssetsSubfolderWithArgs(
@@ -123,12 +214,12 @@ class ADBService : Service() {
                         "-D",
                     )
                 if (result != null) {
-                    KanoLog.d("kano_ZTE_LOG", "iperf3已启动")
+                    KanoLog.d(TAG, "iperf3已启动")
                 } else {
-                    KanoLog.e("kano_ZTE_LOG", "iperf3启动失败(用户模式)")
+                    KanoLog.e(TAG, "iperf3启动失败(用户模式)")
                 }
             }catch (e:Exception){
-                KanoLog.e("kano_ZTE_LOG", "iperf3命令执行出错",e)
+                KanoLog.e(TAG, "iperf3命令执行出错",e)
             }
         }
     }
@@ -139,81 +230,84 @@ class ADBService : Service() {
                 val adbPath = "shell/adb"
 
                 while (!Thread.currentThread().isInterrupted) {
-                    val isDebugEnabled = KanoUtils.isUsbDebuggingEnabled(context)
-                    if (!isDebugEnabled) {
-                        KanoLog.d("kano_ZTE_LOG", "ADB disabled, skipping keep-alive")
+                    val isDebugEnabled = isUsbDebuggingEnabled(context)
+                    if (!isDebugEnabled){
+                        KanoLog.d(TAG, "没有开启ADB，不执行ADB保活")
                         adbIsReady = false
-                        Thread.sleep(11_000)
-                        continue
                     }
-                    KanoLog.d("kano_ZTE_LOG", "保活ADB服务中...")
+                    else {
+                        KanoLog.d(TAG, "保活ADB服务中...")
 
-                    var result =
-                        executeShellFromAssetsSubfolderWithArgs(context, adbPath, "devices") {
-                            ShellKano.killProcessByName("adb")
-                        }
-
-                    if (result?.contains("localhost:5555\tdevice") == true) {
-                        KanoLog.d("kano_ZTE_LOG", "adb存活，无需启动")
-                        adbIsReady = true
-                        if(!isExecutedDisabledFOTA) {
-                            disableFOTATimes --
-                            if(disableFOTATimes <= 0){
-                                KanoLog.d("kano_ZTE_LOG", "已连续3次尝试使用adb禁用FOTA，强制isExecutingDisabledFOTA = true")
-                                isExecutingDisabledFOTA = true
+                        var result =
+                            executeShellFromAssetsSubfolderWithArgs(context, adbPath, "devices") {
+                                ShellKano.killProcessByName("adb")
                             }
-                            val res = KanoUtils.disableFota(applicationContext)
-                            if(res){
-                                KanoLog.d("kano_ZTE_LOG", "使用adb禁用FOTA完成")
+
+                        if (result?.contains("localhost:5555\tdevice") == true) {
+                            KanoLog.d(TAG, "adb存活，无需启动")
+                            adbIsReady = true
+                            if (!isExecutedDisabledFOTA) {
+                                disableFOTATimes--
+                                if (disableFOTATimes <= 0) {
+                                    KanoLog.d(
+                                        TAG,
+                                        "已连续3次尝试使用adb禁用FOTA，强制isExecutingDisabledFOTA = true"
+                                    )
+                                    isExecutingDisabledFOTA = true
+                                }
+                                val res = KanoUtils.disableFota(applicationContext)
+                                if (res) {
+                                    KanoLog.d(TAG, "使用adb禁用FOTA完成")
+                                }
+                                isExecutedDisabledFOTA = true
                             }
-                            isExecutedDisabledFOTA = true
-                        }
-                    } else {
-                        KanoLog.w("kano_ZTE_LOG", "adb无设备或已退出，尝试启动")
-                        adbIsReady = false
+                        } else {
+                            KanoLog.w(TAG, "adb无设备或已退出，尝试启动")
+                            adbIsReady = false
 
-                        ShellKano.killProcessByName("adb")
-                        Thread.sleep(1000)
-
-                        executeShellFromAssetsSubfolderWithArgs(
-                            context,
-                            adbPath,
-                            "connect",
-                            "localhost"
-                        ) {
                             ShellKano.killProcessByName("adb")
-                        }
+                            Thread.sleep(1000)
 
-                        val maxWaitMs = 5_000
-                        val interval = 500
-                        var waited = 0
-
-                        while (waited < maxWaitMs) {
-                            result = executeShellFromAssetsSubfolderWithArgs(
+                            executeShellFromAssetsSubfolderWithArgs(
                                 context,
                                 adbPath,
-                                "devices"
+                                "connect",
+                                "localhost"
                             ) {
                                 ShellKano.killProcessByName("adb")
                             }
 
-                            if (result?.contains("localhost:5555\tdevice") == true) {
-                                KanoLog.d("kano_ZTE_LOG", "ADB连接成功: $result")
-                                adbIsReady = true
-                                break
-                            } else {
-                                KanoLog.d("kano_ZTE_LOG", "ADB未连接: $result")
-                            }
+                            val maxWaitMs = 5_000
+                            val interval = 500
+                            var waited = 0
 
-                            Thread.sleep(interval.toLong())
-                            waited += interval
+                            while (waited < maxWaitMs) {
+                                result = executeShellFromAssetsSubfolderWithArgs(
+                                    context,
+                                    adbPath,
+                                    "devices"
+                                ) {
+                                    ShellKano.killProcessByName("adb")
+                                }
+
+                                if (result?.contains("localhost:5555\tdevice") == true) {
+                                    KanoLog.d(TAG, "ADB连接成功: $result")
+                                    adbIsReady = true
+                                    break
+                                } else {
+                                    KanoLog.d(TAG, "ADB未连接: $result")
+                                }
+
+                                Thread.sleep(interval.toLong())
+                                waited += interval
+                            }
                         }
                     }
                     // 每 11 秒轮询一次
                     Thread.sleep(11_000)
                 }
             } catch (e: Exception) {
-                KanoLog.e("kano_ZTE_LOG", "ADB 保活线程异常", e)
+                KanoLog.e(TAG, "ADB 保活线程异常", e)
             }
         }
     }
@@ -222,6 +316,7 @@ class ADBService : Service() {
         super.onDestroy()
         handlerThread.quitSafely()
         handler.removeCallbacks(runnable)
+        unregisterReceiver(batteryReceiver)
         TaskSchedulerManager.scheduler?.stop()
     }
 

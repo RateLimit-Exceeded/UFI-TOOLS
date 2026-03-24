@@ -810,5 +810,29 @@ class KanoUtils {
                 }
             }
         }
+
+        // 电源监测转发通知（复用短信转发配置）
+        fun forwardBatteryStatusMessage(context: Context, smsContent: SmsInfo) {
+            try {
+                val sharedPrefs =
+                    context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+                val method = sharedPrefs.getString("kano_sms_forward_method", "") ?: ""
+                when (method) {
+                    "SMTP" -> SmsPoll.forwardByEmail(smsContent, context)
+                    "CURL" -> SmsPoll.forwardSmsByCurl(smsContent, context)
+                    "DINGTALK" -> SmsPoll.forwardSmsByDingTalk(smsContent, context)
+                }
+                KanoLog.d(
+                    "UFI_TOOLS_LOG_LowBatteryForward",
+                    "电量转发消息成功，转发类型:$method"
+                )
+            } catch (e: Exception) {
+                KanoLog.e(
+                    "UFI_TOOLS_LOG_LowBatteryForward",
+                    "电量转发消息出错：",
+                    e
+                )
+            }
+        }
     }
 }
