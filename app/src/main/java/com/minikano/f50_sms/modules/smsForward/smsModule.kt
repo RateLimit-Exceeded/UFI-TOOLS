@@ -1,6 +1,7 @@
 package com.minikano.f50_sms.modules.smsForward
 
 import android.content.Context
+import androidx.core.content.edit
 import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.utils.SmsInfo
 import com.minikano.f50_sms.utils.SmsPoll
@@ -8,13 +9,13 @@ import com.minikano.f50_sms.modules.BASE_TAG
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
+import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import org.json.JSONObject
-import androidx.core.content.edit
 
 fun Route.smsModule(context: Context) {
     val TAG = "[$BASE_TAG]_smsModule"
@@ -47,6 +48,7 @@ fun Route.smsModule(context: Context) {
             val smtpPassword = json.optString("smtp_password", "").trim()
             val shouldForwardDeviceInfo = json.optString("forward_dev_info", "0").trim()
 
+
             if (smtpTo.isEmpty() || smtpHost.isEmpty() || smtpUsername.isEmpty() || smtpPassword.isEmpty()) {
                 throw Exception("缺少必要参数")
             }
@@ -65,7 +67,7 @@ fun Route.smsModule(context: Context) {
 
             KanoLog.d(TAG, "SMTP配置已保存：$smtpHost:$smtpPort [$smtpUsername]")
 
-            val test_msg = SmsInfo("1016263950", "UFI-TOOLS TEST消息", 0)
+            val test_msg = SmsInfo("1145141919810", "UFI-TOOLS TEST消息", System.currentTimeMillis())
             SmsPoll.forwardByEmail(test_msg, context)
 
             call.response.headers.append("Access-Control-Allow-Origin", "*")
@@ -90,13 +92,12 @@ fun Route.smsModule(context: Context) {
     get("/api/sms_forward_mail") {
         val sharedPrefs =
             context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-
         val smtpHost = sharedPrefs.getString("kano_smtp_host", "") ?: ""
         val smtpPort = sharedPrefs.getString("kano_smtp_port", "") ?: ""
         val smtpTo = sharedPrefs.getString("kano_smtp_to", "") ?: ""
         val username = sharedPrefs.getString("kano_smtp_username", "") ?: ""
         val password = sharedPrefs.getString("kano_smtp_password", "") ?: ""
-        val shouldForwardDeviceInfo = sharedPrefs.getString("kano_smtp_forward_device_info", "0") ?: "0"
+        val shouldForwardDeviceInfo = sharedPrefs.getString("kano_smtp_forward_device_info","0")?: "0"
 
         val json = """
         {
@@ -130,14 +131,14 @@ fun Route.smsModule(context: Context) {
             // 存储到 SharedPreferences
             val sharedPrefs =
                 context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
-            sharedPrefs.edit().apply {
+            sharedPrefs.edit(commit = true) {
                 putString("kano_sms_forward_method", "CURL")
                 putString("kano_sms_curl", originalCurl)
-            }.commit()
+            }
 
             // 发送测试消息
             val test_msg =
-                SmsInfo("11451419198", "UFI-TOOLS TEST消息", System.currentTimeMillis())
+                SmsInfo("1145141919810", "UFI-TOOLS TEST消息", System.currentTimeMillis())
             SmsPoll.forwardSmsByCurl(test_msg, context)
 
             json.put("curl_text", originalCurl)
@@ -229,6 +230,131 @@ fun Route.smsModule(context: Context) {
         }
     }
 
+    //转发电量信息总开关
+    post("/api/power_status_forward_enabled") {
+        try {
+            val enable = call.request.queryParameters["enable"]
+                ?: throw Exception("query 缺少 enable 参数")
+            KanoLog.d(TAG, "短信转发 enable 传入参数：$enable")
+
+            val sharedPrefs =
+                context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            sharedPrefs.edit(commit = true) {
+                putString("kano_power_status_forward_enabled", enable)
+            }
+
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"result":"success"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.OK
+            )
+        } catch (e: Exception) {
+            KanoLog.d(TAG, "请求出错： ${e.message}")
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"error":"请求出错"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.InternalServerError
+            )
+        }
+    }
+
+    //获取电量信息转发状态
+    get("/api/power_status_forward_enabled") {
+        try {
+            val sharedPrefs =
+                context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            val str = sharedPrefs.getString("kano_power_status_forward_enabled", "0") ?: "0"
+
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"enabled":"$str"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.OK
+            )
+        } catch (e: Exception) {
+            KanoLog.d(TAG, "请求出错： ${e.message}")
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"error":"请求出错"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.InternalServerError
+            )
+        }
+    }
+
+    //短信转发黑名单配置
+    post("/api/sms_forward_blacklist") {
+        try {
+            val raw = call.receiveText()
+
+            val json = JSONObject(raw)
+
+            if (!json.has("phone")) throw Exception("缺少 phone 参数")
+            if (!json.has("keywords")) throw Exception("缺少 keywords 参数")
+
+            val phone = json.optString("phone")
+            val keywords = json.optString("keywords")
+
+            if (!phone.matches(Regex("^[0-9\\n]*$"))) {
+                throw Exception("phone 参数非法")
+            }
+
+            val sharedPrefs =
+                context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            sharedPrefs.edit(commit = true) {
+                putString("kano_sms_forward_blacklist_phone", phone)
+                putString("kano_sms_forward_blacklist_keywords", keywords)
+            }
+
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"result":"success"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.OK
+            )
+        } catch (e: Exception) {
+            KanoLog.d(TAG, "请求出错：${e.message}")
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"error":"请求出错"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.InternalServerError
+            )
+        }
+    }
+
+    //获取短信转发黑名单
+    get("/api/sms_forward_blacklist") {
+        try {
+            val sharedPrefs =
+                context.getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
+            val keywords = sharedPrefs.getString("kano_sms_forward_blacklist_keywords", "") ?: ""
+            val phone = sharedPrefs.getString("kano_sms_forward_blacklist_phone", "") ?: ""
+
+            val json = JSONObject().apply {
+                put("keywords", keywords)
+                put("phone", phone)
+            }
+
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                json.toString(),
+                ContentType.Application.Json,
+                HttpStatusCode.OK
+            )
+        } catch (e: Exception) {
+            KanoLog.d(TAG, "请求出错： ${e.message}")
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                """{"error":"请求出错"}""",
+                ContentType.Application.Json,
+                HttpStatusCode.InternalServerError
+            )
+        }
+    }
+
     //短信转发参数存入-钉钉webhook
     post("/api/sms_forward_dingtalk") {
         try {
@@ -250,14 +376,14 @@ fun Route.smsModule(context: Context) {
                 putString("kano_sms_forward_method", "DINGTALK")
                 putString("kano_dingtalk_webhook", webhookUrl)
                 putString("kano_dingtalk_secret", secret)
-                putString("kano_dingtalk_forward_device_info", shouldForwardDeviceInfo)
+                putString("kano_dingtalk_forward_device_info",shouldForwardDeviceInfo)
             }
 
             KanoLog.d(TAG, "钉钉配置已保存：$webhookUrl")
 
             // 发送测试消息
             val test_msg =
-                SmsInfo("1010721", "UFI-TOOLS TEST消息", System.currentTimeMillis())
+                SmsInfo("1145141919810", "UFI-TOOLS TEST消息", System.currentTimeMillis())
             SmsPoll.forwardSmsByDingTalk(test_msg, context)
 
             call.response.headers.append("Access-Control-Allow-Origin", "*")
@@ -284,8 +410,7 @@ fun Route.smsModule(context: Context) {
 
         val webhookUrl = sharedPrefs.getString("kano_dingtalk_webhook", "") ?: ""
         val secret = sharedPrefs.getString("kano_dingtalk_secret", "") ?: ""
-        val shouldForwardDeviceInfo =
-            sharedPrefs.getString("kano_dingtalk_forward_device_info", "0") ?: "0"
+        val shouldForwardDeviceInfo = sharedPrefs.getString("kano_dingtalk_forward_device_info","0")?: "0"
 
         val json = """
         {

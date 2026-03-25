@@ -220,10 +220,6 @@ function main_func() {
                 "isShow": true
             },
             {
-                "name": "monthly_data",
-                "isShow": true
-            },
-            {
                 "name": "current_now",
                 "isShow": true
             },
@@ -488,19 +484,9 @@ function main_func() {
         initSleepTime()
         initAdvanceTools()
         QOSRDPCommand("AT+CGEQOSRDP=1")
+        initTerms()
         initCheckWeakToken()
         initTTYD()
-    }
-
-    //检测是否启用高级功能
-    const checkAdvanceFunc = async () => {
-        const res = await runShellWithRoot('whoami')
-        if (res.content) {
-            if (res.content.includes('root')) {
-                return true
-            }
-        }
-        return false
     }
 
     let toastTimer = null
@@ -588,6 +574,7 @@ function main_func() {
             localStorage.setItem('kano_sms_token', SHA256(token.trim()).toLowerCase())
             closeModal('#tokenModal')
             initRenderMethod()
+            initMessage()
         }
         catch (e) {
             toastTimer && clearTimeout(toastTimer)
@@ -673,7 +660,7 @@ function main_func() {
     }
 
     const deleteState = new Map();
-    const deleteSMS = async (id) => {
+    const deleteSMS = async (id, flag = false) => {
         const message = document.querySelector(`#message${id}`);
         if (!message) return;
         // 获取当前 id 的删除状态
@@ -682,8 +669,9 @@ function main_func() {
         if (state.isDeleting) return; // 正在删除时禁止操作
 
         state.confirmCount += 1;
-        message.style.display = '';
-
+        if (!flag) {
+            message.style.display = '';
+        }
         // 清除之前的计时器，重新设置 2 秒后重置状态
         clearTimeout(state.timer);
         state.timer = setTimeout(() => {
@@ -694,8 +682,9 @@ function main_func() {
 
         deleteState.set(id, state);
 
-        if (state.confirmCount < 2) return; // 第一次点击时仅提示
-
+        if (!flag) {
+            if (state.confirmCount < 2) return; // 第一次点击时仅提示
+        }
         // 进入删除状态，防止重复点击
         state.isDeleting = true;
         deleteState.set(id, state);
@@ -703,8 +692,13 @@ function main_func() {
         try {
             const res = await removeSmsById(id);
             if (res?.result === 'success') {
-                createToast(t('toast_delete_success'), 'green');
-                setTimeout(() => handleSmsRender(), 300)
+                if (!flag) {
+                    createToast(t('toast_delete_success'), 'green');
+                }
+                setTimeout(() => {
+                    handleSmsRender();
+                    state.isDeleting = false;
+                }, 300)
             } else {
                 createToast(res?.message || t('toast_delete_failed'), 'red');
             }
@@ -712,13 +706,13 @@ function main_func() {
             createToast(t('toast_opration_failed_network'), 'red');
         }
 
-    // 删除完成后，清理状态
-    deleteState.delete(id);
-};
+        // 删除完成后，清理状态
+        deleteState.delete(id);
+    };
 
     let deleteAndReSendSms = async (id) => {
-        try { await removeSmsById(id) } catch { }
-
+        await deleteSMS(id, true)
+        //填充
         let smsListEl = document.querySelectorAll("#sms-list .sms-item")
         if (!smsListEl || !smsListEl.length) return
         let smsList = Array.from(smsListEl)
@@ -734,7 +728,6 @@ function main_func() {
                 break
             }
         }
-        setTimeout(() => handleSmsRender(), 300)
     }
 
     let isFirstRender = true
@@ -777,11 +770,13 @@ function main_func() {
                 date = date.map((item, index) => {
                     return item + dateStrArr[index]
                 }).join('')
-                return `<li class="sms-item" data-sms-id="${item.id}" data-sms-phone="${item.number}" data-sms-content="${item.content}" style="${item.tag == '3' ? 'background-color:#ffc0cb1f;margin-right:15px' : item.tag != '2' ? 'background-color:#0880001f;margin-left:15px' : 'background-color:#ffc0cb63;margin-right:15px'}">
-                                        <div class="arrow" style="${item.tag == '3' ? 'right:-30px;border-color: transparent transparent transparent #ffc0cb1f' : item.tag == '2' ? 'right:-30px;border-color: transparent transparent transparent #ffc0cb63' : 'left:-30px;border-color: transparent #0880001f transparent transparent'}"></div>
-                                        ${item.tag == "3" ? `<svg onclick="deleteAndReSendSms(${item.id})" class="icon" style="position: absolute;right: 50px;top: 18px;" width="14px" height="14px" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path fill="red" d="M815.36 184.96V128a36.48 36.48 0 0 1 10.24-26.88 37.76 37.76 0 0 1 52.48 0 40.96 40.96 0 0 1 11.52 26.88v172.16a40.32 40.32 0 0 1-37.12 37.12h-173.44a40.32 40.32 0 0 1-26.88-11.52 37.76 37.76 0 0 1 0-52.48 35.84 35.84 0 0 1 26.88-10.24h108.8a372.48 372.48 0 0 0-453.12-75.52A367.36 367.36 0 0 0 170.24 364.8a374.4 374.4 0 0 0-19.84 242.56 369.92 369.92 0 0 0 132.48 202.24A375.04 375.04 0 0 0 512 888.32a368.64 368.64 0 0 0 263.68-108.8A376.32 376.32 0 0 0 885.12 512H960A448 448 0 1 1 136.32 270.08a438.4 438.4 0 0 1 192-164.48 444.16 444.16 0 0 1 256-32 455.68 455.68 0 0 1 230.4 111.36z"></path></svg>`: ""}
+                return `<li class="sms-item" data-sms-id="${item.id}" data-sms-phone="${item.number}" data-sms-content="${item.content}" style="${item.tag == '3' ? 'background-color:#ffc0cb1f;margin-right:15px' : item.tag != '2' ? 'background-color:#0880001f;margin-left:15px' : 'background-color:#ffc0cb1f;margin-right:15px'}">
+                                        <div class="arrow" style="${item.tag == '3' ? 'right:-30px;border-color: transparent transparent transparent #ffc0cb1f' : item.tag == '2' ? 'right:-30px;border-color: transparent transparent transparent #ffc0cb1f' : 'left:-30px;border-color: transparent #0880001f transparent transparent'}"></div>
+                                        ${item.tag == "3" ? `<svg onclick="deleteAndReSendSms(${item.id})" class="icon" style="position: absolute;right: 50px;top: 18px;" width="14px" height="14px" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                <path fill="red" d="M815.36 184.96V128a36.48 36.48 0 0 1 10.24-26.88 37.76 37.76 0 0 1 52.48 0 40.96 40.96 0 0 1 11.52 26.88v172.16a40.32 40.32 0 0 1-37.12 37.12h-173.44a40.32 40.32 0 0 1-26.88-11.52 37.76 37.76 0 0 1 0-52.48 35.84 35.84 0 0 1 26.88-10.24h108.8a372.48 372.48 0 0 0-453.12-75.52A367.36 367.36 0 0 0 170.24 364.8a374.4 374.4 0 0 0-19.84 242.56 369.92 369.92 0 0 0 132.48 202.24A375.04 375.04 0 0 0 512 888.32a368.64 368.64 0 0 0 263.68-108.8A376.32 376.32 0 0 0 885.12 512H960A448 448 0 1 1 136.32 270.08a438.4 438.4 0 0 1 192-164.48 444.16 444.16 0 0 1 256-32 455.68 455.68 0 0 1 230.4 111.36z"></path>
+            </svg>`: ""}
                                         <div class="icon" onclick="deleteSMS(${item.id})">
-                                            <span id="message${item.id}" style="display:none;color:red;position: absolute;width: 100px;top: 6px;right: 20px;">确定要删除吗？</span>
+                                            <span id="message${item.id}" style="color: red;position: absolute;width: 100px;top: 2px;right: 30px;background: var(--dark-tag-color-active);display: none;text-align: center;padding: 4px;border-radius: 8px;backdrop-filter: blur(var(--blur-rate));">确定要删除吗？</span>
                                             <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" t="1742373390977" class="icon" viewBox="0 0 1024 1024" version="1.1" p-id="2837" width="16" height="16"><path d="M848 144H608V96a48 48 0 0 0-48-48h-96a48 48 0 0 0-48 48v48H176a48 48 0 0 0-48 48v48h768v-48a48 48 0 0 0-48-48zM176 928a48 48 0 0 0 48 48h576a48 48 0 0 0 48-48V288H176v640z m480-496a48 48 0 1 1 96 0v400a48 48 0 1 1-96 0V432z m-192 0a48 48 0 1 1 96 0v400a48 48 0 1 1-96 0V432z m-192 0a48 48 0 1 1 96 0v400a48 48 0 1 1-96 0V432z" fill="" p-id="2838"/></svg>
                                         </div>
                                         <p style="color:#adadad;font-size:16px;margin:4px 0">${item.number}${item.tag == '3' ? ` <span style="font-size:.7rem;color:red">(${t("toast_sms_send_failed")})</span>` : ""}</p>
@@ -798,51 +793,6 @@ function main_func() {
         }
     }
 
-    const showNetConnInfoModal = async () => {
-        if (!(await initRequestData())) {
-            createToast(t('toast_please_login'), 'red')
-            return null
-        }
-
-        const name = "kano_net_info_modal"
-        try {
-            const existing = document.querySelector(`#${name}`)
-            existing && existing.remove()
-        } catch { }
-
-        const res = await getNetConnInfo()
-        const title = t('network_conn_info')
-        const modalTitle = (title && title !== 'network_conn_info') ? title : 'Network connections'
-        const intervalFn = requestInterval(() => {
-            getNetConnInfo().then(res => {
-                const contentEl = document.querySelector(`#${name} .content`)
-                if (contentEl) {
-                    contentEl.innerHTML = renderConnectStatusContent(res)
-                }
-            })
-        }, REFRESH_TIME + 114)
-
-        const md = createModal({
-            name,
-            isMask: false,
-            title: modalTitle,
-            maxWidth: "400px",
-            contentStyle: "font-size:.7rem;line-height:1.5",
-            onClose: () => {
-                intervalFn && intervalFn()
-                return true
-            },
-            content: renderConnectStatusContent(res)
-        })
-
-        try {
-            const confirm = md?.el?.querySelector(`#${name}_confirm`)
-            confirm && (confirm.style.display = 'none')
-        } catch { }
-
-        md?.id && showModal(md.id)
-    }
-
     let cachedDiagImeiQueryResult = ''
     let diagImeiTimer = null
     const queryImeiFromDIAG = async () => {
@@ -855,7 +805,7 @@ function main_func() {
         if (cachedDiagImeiQueryResult && cachedDiagImeiQueryResult != '') {
             return cachedDiagImeiQueryResult
         }
-        let isEnabled = await checkAdvanceFunc()
+        let isEnabled = await checkAdvancedFunc()
         if (isEnabled) {
             try {
                 const res = await runShellWithRoot(`/data/data/com.minikano.f50_sms/files/imei_reader`)
@@ -961,24 +911,47 @@ function main_func() {
 
             adbQuery()
             isNotLoginOnce = false
-            const current_cell = document.querySelector('#CURRENT_CELL')
             let html = ''
+            try {
+                const current_cell = document.querySelector('#CURRENT_CELL')
+                const select_current_cell_btn = document.querySelector('#SELECT_CURRENT_CELL_BTN')
 
-            if (current_cell) {
-                current_cell.innerHTML = `<i>${t('current_cell')}</i><br/>`
-                current_cell.innerHTML += `
-            ${notNullOrundefinedOrIsShow(res, 'Lte_fcn') ? `<span>${t('network_freq')}: ${res.Lte_fcn}</span>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'Lte_pci') ? `<span>&nbsp;PCI: ${res.Lte_pci}</span>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'Nr_fcn') ? `<span>${t('network_freq')}: ${res.Nr_fcn}</span>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'Nr_pci') ? `<span>&nbsp;PCI: ${res.Nr_pci}</span>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'lte_rsrp') ? `<div style="display: flex;padding-bottom:2px;align-items: center;">RSRP:&nbsp; ${kano_parseSignalBar(res.lte_rsrp)}</div>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'Lte_snr') ? `<div style="display: flex;align-items: center;">SINR:&nbsp; ${kano_parseSignalBar(res.Lte_snr, -10, 30, 13, 0)}</div>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'lte_rsrq') ? `<div style="display: flex;padding-top:2px;align-items: center;">RSRQ:&nbsp; ${kano_parseSignalBar(res.lte_rsrq, -20, -3, -9, -12)}</div>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'Z5g_rsrp') ? `<div style="display: flex;padding-bottom:2px;align-items: center;width: 114px;justify-content: space-between"><span>RSRP:</span>${kano_parseSignalBar(res.Z5g_rsrp)}</div>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'Nr_snr') ? `<div style="display: flex;align-items: center;width: 114px;justify-content: space-between"><span>SINR:</span>${kano_parseSignalBar(res.Nr_snr, -10, 30, 13, 0)}</div>` : ''}
-            ${notNullOrundefinedOrIsShow(res, 'nr_rsrq') ? `<div style="display: flex;padding-top:2px;align-items: center;width: 114px;justify-content: space-between"><span>RSRQ:</span>${kano_parseSignalBar(res.nr_rsrq, -20, -3, -9, -12)}</div>` : ''}
-            <button style="margin:4px 0" onclick="onSelectCellRow(${notNullOrundefinedOrIsShow(res, 'Nr_pci') ? res.Nr_pci : res.Lte_pci},${notNullOrundefinedOrIsShow(res, 'Nr_fcn') ? res.Nr_fcn : res.Lte_fcn})">${t('select_current_cell')}</button>
+                const PCI = notNullOrundefinedOrIsShow(res, 'Nr_pci') ? res.Nr_pci : (notNullOrundefinedOrIsShow(res, 'Lte_pci') ? res.Lte_pci : '')
+                const FCN = notNullOrundefinedOrIsShow(res, 'Nr_fcn') ? res.Nr_fcn : (notNullOrundefinedOrIsShow(res, 'Lte_fcn') ? res.Lte_fcn : '')
+                const BAND_STR = notNullOrundefinedOrIsShow(res, 'Nr_bands') ? "N" + res.Nr_bands : (notNullOrundefinedOrIsShow(res, 'Lte_bands') ? "B" + res.Lte_bands : '')
+                const RSRP = notNullOrundefinedOrIsShow(res, 'Z5g_rsrp') ? res.Z5g_rsrp : (notNullOrundefinedOrIsShow(res, 'lte_rsrp') ? res.lte_rsrp : '')
+                const SINR = notNullOrundefinedOrIsShow(res, 'Nr_snr') ? res.Nr_snr : (notNullOrundefinedOrIsShow(res, 'Lte_snr') ? res.Lte_snr : '')
+                const RSRQ = notNullOrundefinedOrIsShow(res, 'nr_rsrq') ? res.nr_rsrq : (notNullOrundefinedOrIsShow(res, 'lte_rsrq') ? res.lte_rsrq : '')
+
+                if (!PCI || !FCN) {
+                    if (current_cell) {
+                        current_cell.innerHTML = `<tr><td colspan="6" style="opacity:.66;text-align:center;color:var(--dark-text-color)">${t('no_cell_connected')}</td></tr>`
+                    }
+                    if (select_current_cell_btn) {
+                        select_current_cell_btn.onclick = () => {
+                            createToast(t('no_cell_connected'), 'pink')
+                        }
+                    }
+                }
+
+                if (select_current_cell_btn) {
+                    select_current_cell_btn.onclick = () => onSelectCellRow(PCI, FCN)
+                }
+
+                if (current_cell) {
+                    current_cell.innerHTML = `
+            <tr onclick="onSelectCellRow(${PCI},${FCN})" style="cursor: pointer;">
+                <td>${BAND_STR}</td>
+                <td>${FCN}</td>
+                <td>${PCI}</td>
+                <td>${kano_parseSignalBar(RSRP)}</td>
+                <td>${kano_parseSignalBar(SINR, -10, 30, 13, 0)}</td>
+                <td>${kano_parseSignalBar(RSRQ, -20, -3, -9, -12)}</td>
+            </tr>
             `
+                }
+            } catch (e) {
+                console.error("render PCI blocks fail:", e);
             }
 
             try {
@@ -1010,12 +983,11 @@ function main_func() {
                     if (!limit_size) return ''
                     return limit_size.split('_')[0] * limit_size.split('_')[1] * Math.pow(1024, 2)
                 })()) : ''}</strong>` : ''}`,
-                daily_data: `${notNullOrundefinedOrIsShow(res, 'daily_data') ? `<strong onclick="copyText(event)"  class="blue">${t('daily_data')}：${formatBytes(res.daily_data)}</strong>` : ''}`,
+                daily_data: `${notNullOrundefinedOrIsShow(res, 'daily_data') ? `<strong onclick="copyText(event)"  class="blue">${t('daily_data')}：${formatBytes(res.daily_data)}${res.monthly_data ? ` / ${t('monthly_data')}：${formatBytes(res.monthly_data)}` : ''}</strong>` : ''}`,
                 current_now: `${notNullOrundefinedOrIsShow(res, 'current_now') && (res.battery_value != '' || res.battery_vol_percent != '') ? `<strong onclick="copyText(event)"  class="blue">${t('battery_current')}：<span style="width: 9ch;text-align:center">${res.current_now / 1000} mA</span></strong>` : ''}`,
                 voltage_now: `${notNullOrundefinedOrIsShow(res, 'voltage_now') && (res.battery_value != '' || res.battery_vol_percent != '') ? `<strong onclick="copyText(event)"  class="blue">${t('battery_voltage')}：${(res.voltage_now / 1000000).toFixed(3)} V</strong>` : ''}`,
                 realtime_rx_thrpt: `${notNullOrundefinedOrIsShow(res, 'realtime_tx_thrpt') || notNullOrundefinedOrIsShow(res, 'realtime_rx_thrpt') ? `<strong onclick="copyText(event)" class="blue">${t("current_network_speed")}: <span style="text-align:center;white-space:nowrap;overflow:hidden;display:inline-block;width: 14ch;">⬇️&nbsp;${formatBytes(Number((res.realtime_rx_thrpt)))}/S</span><span style="white-space:nowrap;overflow:hidden;text-align:center;display:inline-block;width: 14ch;font-weight:bolder">⬆️&nbsp;${formatBytes(Number((res.realtime_tx_thrpt)))}/S</span></strong>` : ''}`,
             }
-            statusHtml_base.monthly_data = `${notNullOrundefinedOrIsShow(res, 'monthly_data') ? `<strong onclick="copyText(event)"  class="blue">${t('monthly_data')}：${formatBytes(res.monthly_data)}</strong>` : ''}`
             let statusHtml_net = {
                 lte_rsrp: notNullOrundefinedOrIsShow(res, 'lte_rsrp') ? `<strong onclick="copyText(event)" class="green">${t('4g_rsrp')}：${kano_parseSignalBar(res.lte_rsrp)}</strong>` : '',
                 Lte_snr: notNullOrundefinedOrIsShow(res, 'Lte_snr') ? `<strong onclick="copyText(event)" class="blue">${t('4g_sinr')}：${kano_parseSignalBar(res.Lte_snr, -10, 30, 13, 0)}</strong>` : '',
@@ -1715,9 +1687,12 @@ function main_func() {
 
             if (neighbor_cell_info && !onlyRefreshLockedInfoList) {
                 const cellBodyEl = document.querySelector('#cellForm tbody')
-                cellBodyEl.innerHTML = neighbor_cell_info.map(item => {
-                    const { band, earfcn, pci, rsrp, rsrq, sinr } = item
-                    return `
+                if (neighbor_cell_info.length <= 0) {
+                    cellBodyEl.innerHTML = `<tr><td colspan="6" style="opacity:.66;text-align:center;color:var(--dark-text-color)">${t('no_neighbour_cell')}</td></tr>`
+                } else {
+                    cellBodyEl.innerHTML = neighbor_cell_info.map(item => {
+                        const { band, earfcn, pci, rsrp, rsrq, sinr } = item
+                        return `
                     <tr onclick="onSelectCellRow(${pci},${earfcn})">
                         <td>${band}</td>
                         <td>${earfcn}</td>
@@ -1727,20 +1702,25 @@ function main_func() {
                         <td>${kano_parseSignalBar(rsrq, -20, -3, -9, -12)}</td>
                     </tr>
                 `
-                }).join('')
+                    }).join('')
+                }
             }
             if (locked_cell_info) {
                 const lockedCellBodyEl = document.querySelector('#LOCKED_CELL_FORM tbody')
-                lockedCellBodyEl.innerHTML = locked_cell_info.map(item => {
-                    const { earfcn, pci, rat } = item
-                    return `
+                if (locked_cell_info.length <= 0) {
+                    lockedCellBodyEl.innerHTML = `<tr><td colspan="3" style="opacity:.66;text-align:center;color:var(--dark-text-color)">${t('no_locked_cell')}</td></tr>`
+                } else {
+                    lockedCellBodyEl.innerHTML = locked_cell_info.map(item => {
+                        const { earfcn, pci, rat } = item
+                        return `
                     <tr>
                         <td>${rat == '12' ? '4G' : '5G'}</td>
                         <td>${pci}</td>
                         <td>${earfcn}</td>
                     </tr>
                 `
-                }).join('')
+                    }).join('')
+                }
             }
         } catch (e) {
             // createToast(e.message)
@@ -1781,7 +1761,7 @@ function main_func() {
     let onSelectCellRow = (pci, earfcn) => {
         let pci_t = document.querySelector('#PCI')
         let earfcn_t = document.querySelector('#EARFCN')
-        if (pci_t && earfcn_t) {
+        if (pci_t && earfcn_t && isNaN(pci) == false && isNaN(earfcn) == false) {
             pci_t.value = pci
             earfcn_t.value = earfcn
             createToast(`${t('toast_has_selected')}: ${pci},${earfcn}`, 'green')
@@ -2934,22 +2914,22 @@ function main_func() {
     }
     initTTYD()
 
-    const openDevMenu = async (e) => {
-        try {
-            e?.preventDefault?.()
-        } catch { }
-
-        if (!(await initRequestData())) {
-            createToast(t('toast_please_login'), 'red')
-            return
+    let click_count_ttyd = 1
+    let ttyd_timer = null
+    let enableTTYD = () => {
+        click_count_ttyd++
+        if (click_count_ttyd >= 4) {
+            // 启用ttyd弹窗
+            initResServer()
+            showModal('#TTYDModal')
+            ttyd_timer && clearInterval(ttyd_timer)
+            click_count_ttyd = 1
         }
-
-        await initResServer()
-        showModal('#TTYDModal')
+        ttyd_timer && clearInterval(ttyd_timer)
+        ttyd_timer = setTimeout(() => {
+            click_count_ttyd = 1
+        }, 1999)
     }
-
-    // Backward compatible name
-    const enableTTYD = openDevMenu
 
     let handleTTYDFormSubmit = (e) => {
         e.preventDefault()
@@ -3228,14 +3208,16 @@ function main_func() {
     }
 
     const socatAlive = async () => {
-        let res = await checkAdvanceFunc()
+        let res = await checkAdvancedFunc()
         if (res) {
             let smb = document.querySelector('#SMB')
             smb && (smb.style.display = 'none')
         }
-        const socat_status = document.querySelector('#socat_status')
+        const socat_status = document.querySelectorAll('.socat_status')
         if (socat_status) {
-            socat_status.innerHTML = res ? `${t('advanced')}：🟢 ${t('advanced_tools_on')}` : `${t('advanced')}：🔴 ${t('advanced_tools_off')}`
+            socat_status.forEach(item => {
+                item.innerHTML = res ? `${t('advanced')}：🟢 ${t('advanced_tools_on')}` : `${t('advanced')}：🔴 ${t('advanced_tools_off')}`
+            })
         }
     }
     socatAlive()
@@ -3697,7 +3679,7 @@ function main_func() {
             // 检查文件大小
             if (file.size > MAX_SIZE * 1024 * 1024) {
                 // MAX_SIZE MB
-                createToast(`${t('file_size_over_limit')}${MAX_SIZE}MB！`, 'red')
+                createToast(`${t('toast_file_size_over_limit')}${MAX_SIZE}MB！`, 'red')
             } else {
 
                 //上传图片
@@ -3730,6 +3712,24 @@ function main_func() {
                 }
             }
         }
+    }
+
+    //打赏模态框设置
+    const payModalState = localStorage.getItem('hidePayAndGroupModal') || false
+    !payModalState && window.addEventListener('load', () => {
+        setTimeout(() => {
+            showModal('#payModal')
+        }, 300);
+    })
+
+    const onClosePayModal = () => {
+        closeModal('#payModal')
+        localStorage.setItem('hidePayAndGroupModal', 'true')
+    }
+
+    const handleClosePayModal = (e) => {
+        if (e.target.id != 'payModal') return
+        onClosePayModal()
     }
 
     //展开收起
@@ -3847,7 +3847,7 @@ function main_func() {
         doUpdateEl.innerHTML = t('one_click_update')
 
         // 是否启用高级功能
-        const isEnabledAdvanceFunc = await checkAdvanceFunc()
+        const isEnabledAdvanceFunc = await checkAdvancedFunc()
 
         if (!isEnabledAdvanceFunc) {
             let adb_status = await adbKeepAlive()
@@ -3936,6 +3936,7 @@ function main_func() {
         OTATextContent.innerHTML = t('checking_update')
         !silent && (changelogTextContent.innerHTML = '')
         !silent && showModal('#updateSoftwareModal')
+        !silent && (socatAlive())
 
         try {
             const content = await queryUpdate()
@@ -3988,6 +3989,14 @@ function main_func() {
                             doDownloadAPKEl.onclick = null
                             doUpdateEl.style.backgroundColor = 'var(--dark-btn-disabled-color)'
                             doDownloadAPKEl.style.backgroundColor = 'var(--dark-btn-disabled-color)'
+                        }
+                        //有强制更新字段，允许更新
+                        if (window.UFI_FORCE_ENABLE_UPDATE) {
+                            window.UFI_FORCE_ENABLE_UPDATE = false
+                            doUpdateEl.style.backgroundColor = 'var(--dark-btn-color)'
+                            doDownloadAPKEl.style.backgroundColor = 'var(--dark-btn-color)'
+                            doUpdateEl.onclick = () => handleUpdateSoftware(base_uri + name)
+                            doDownloadAPKEl.onclick = () => handleDownloadSoftwareLink(base_uri + name)
                         }
                     }
                     //获取changeLog
@@ -4165,13 +4174,13 @@ function main_func() {
             const smtpToEl = document.querySelector('#smtp_to')
             const smtpUsernameEl = document.querySelector('#smtp_username')
             const smtpPasswordEl = document.querySelector('#smtp_password')
+            const forwardDevInfoEl = document.querySelector('#smsForwardForm input[name="forward_dev_info"]')
+            forwardDevInfoEl.checked = forward_dev_info == "1"
             smtpHostEl.value = smtp_host || ''
             smtpPortEl.value = smtp_port || ''
             smtpUsernameEl.value = smtp_username || ''
             smtpPasswordEl.value = smtp_password || ''
             smtpToEl.value = smtp_to || ''
-            const forwardDevInfoEl = document.querySelector('#smsForwardForm input[name="forward_dev_info"]')
-            if (forwardDevInfoEl) forwardDevInfoEl.checked = forward_dev_info == "1"
             needSwitch && switchSmsForwardMethodTab({ target: document.querySelector('#smtp_btn') })
         } else if (method.toLowerCase() == 'curl') {
             //获取模态框数据
@@ -4192,10 +4201,10 @@ function main_func() {
             const { webhook_url, secret, forward_dev_info } = data
             const webhookEl = document.querySelector('#dingtalk_webhook')
             const secretEl = document.querySelector('#dingtalk_secret')
+            const forwardDevInfoEl = document.querySelector('#smsForwardDingTalkForm input[name="forward_dev_info"]')
+            forwardDevInfoEl.checked = forward_dev_info == "1"
             webhookEl.value = webhook_url || ''
             secretEl.value = secret || ''
-            const forwardDevInfoEl = document.querySelector('#smsForwardDingTalkForm input[name="forward_dev_info"]')
-            if (forwardDevInfoEl) forwardDevInfoEl.checked = forward_dev_info == "1"
             needSwitch && switchSmsForwardMethodTab({ target: document.querySelector('#dingtalk_btn') })
         } else {
             needSwitch && switchSmsForwardMethodTab({ target: document.querySelector('#smtp_btn') })
@@ -4251,6 +4260,31 @@ function main_func() {
         return method.toLowerCase()
     }
 
+    // 短信转发-电源转发开关
+    const collapse_smsforward_power_status_btn = document.querySelector('#collapse_smsforward_power_status_btn')
+    const collapse_smsforward_power_status_btn_component = createSwitch({
+        value: false,
+        onChange: async (checked) => {
+            if (checked != undefined) {
+                try {
+                    await (await fetch(`${KANO_baseURL}/power_status_forward_enabled?enable=${checked ? "1" : "0"}`, {
+                        method: 'post',
+                        headers: {
+                            ...common_headers,
+                            'Content-Type': 'application/json'
+                        }
+                    })).json()
+                    createToast(`${t('power_status_forward')} ${checked ? t('enabled') : t('disabled')}`, 'green')
+                } catch (e) {
+                    createToast(t('toast_oprate_failed'), 'red')
+                }
+            }
+        }
+    })
+    if (collapse_smsforward_power_status_btn && collapse_smsforward_power_status_btn_component) {
+        collapse_smsforward_power_status_btn.appendChild(collapse_smsforward_power_status_btn_component)
+    }
+
     //初始化短信转发模态框
     const initSmsForwardModal = async () => {
         const btn = document.querySelector('#smsForward')
@@ -4262,8 +4296,19 @@ function main_func() {
         btn.style.backgroundColor = 'var(--dark-btn-color)'
         btn.onclick = async () => {
             initSmsForward()
-            initSmsForwardSwitch().then(() => {
+            initSmsForwardSwitch().then(async () => {
                 showModal('#smsForwardModal')
+                if (collapse_smsforward_power_status_btn_component) {
+                    try {
+                        const { enabled } = await (await fetch(`${KANO_baseURL}/power_status_forward_enabled`, {
+                            method: 'GET',
+                            headers: common_headers
+                        })).json()
+                        collapse_smsforward_power_status_btn_component.update(enabled == "1")
+                    } catch (e) {
+                        console.error("power_status_forward_enabled request failed", e)
+                    }
+                }
             })
         }
     }
@@ -4278,7 +4323,8 @@ function main_func() {
         const smtp_to = formData.get('smtp_to')
         const smtp_username = formData.get('smtp_username')
         const smtp_password = formData.get('smtp_password')
-        const forward_dev_info = formData.get('forward_dev_info') ? '1' : '0'
+        const forward_dev_info = formData.get('forward_dev_info') != null
+
 
         if (!smtp_host || smtp_host.trim() == '') return createToast(t('toast_please_input_smtp_host'), 'red')
         if (!smtp_port || smtp_port.trim() == '') return createToast(t('toast_please_input_smtp_port'), 'red')
@@ -4300,7 +4346,7 @@ function main_func() {
                     smtp_username: smtp_username.trim(),
                     smtp_password: smtp_password.trim(),
                     smtp_to: smtp_to.trim(),
-                    forward_dev_info
+                    forward_dev_info: forward_dev_info ? "1" : "0"
                 })
             })).json()
             if (res.result == 'success') {
@@ -4366,9 +4412,10 @@ function main_func() {
         const formData = new FormData(form);
         const webhook_url = formData.get('dingtalk_webhook')
         const secret = formData.get('dingtalk_secret')
-        const forward_dev_info = formData.get('forward_dev_info') ? '1' : '0'
+        const forward_dev_info = formData.get('forward_dev_info') != null
 
-        console.log('钉钉表单数据:', { webhook_url, secret })
+
+        console.log('钉钉表单数据:', { webhook_url, secret, forward_dev_info })
 
         if (!webhook_url || webhook_url.trim() == '') return createToast(t('no_dingtalk_url'), 'red')
 
@@ -4383,7 +4430,7 @@ function main_func() {
                 body: JSON.stringify({
                     webhook_url: webhook_url.trim(),
                     secret: secret.trim(),
-                    forward_dev_info
+                    forward_dev_info: forward_dev_info ? "1" : "0"
                 })
             })).json()
             if (res.result == 'success') {
@@ -4434,13 +4481,110 @@ function main_func() {
                         'Content-Type': 'application/json'
                     }
                 })).json()
-                createToast(`${t('sms_forward')}${status == 'open' ? t('enabled') : t('disabled')}`, 'green')
-                console.log(status);
+                createToast(`${t('sms_forward')} ${status == 'open' ? t('enabled') : t('disabled')}`, 'green')
             } catch (e) {
                 createToast(t('toast_oprate_failed'), 'red')
             }
         }
     })
+
+    //短信转发规则设置
+    const forwardMethodSettingBtn = document.querySelector('#forward_method_setting_btn')
+    if (forwardMethodSettingBtn) {
+        forwardMethodSettingBtn.onclick = async () => {
+            try {
+                //获取数据
+                const { keywords, phone } = await (await fetch(`${KANO_baseURL}/sms_forward_blacklist`, {
+                    method: 'GET',
+                    headers: common_headers
+                })).json()
+
+                const { el, close } = createFixedToast('kano_sms_forward_rules_toast', `
+            <div style="pointer-events:all;width:80vw;max-width:400px">
+            <div class="title" style="margin:0" data-i18n="kano_sms_forward_rules_toast_title">${t('kano_sms_forward_rules_toast_title')}</div>
+            <p class="title" style="margin-top:10px" data-i18n="phone_black_list">${t('phone_black_list')}</p>
+            <textarea id="kano_sms_forward_rules_phone_list" style="width: 100%;box-sizing: border-box;min-height: 5em;" data-i18n-placeholder="phone_black_list_placeholder" placeholder="${t('phone_black_list_placeholder')}"></textarea>
+            <p class="title" style="margin-top:10px" data-i18n="keyword_black_list">${t('keyword_black_list')}</p>
+            <textarea id="kano_sms_forward_rules_keywords_list" style="width: 100%;box-sizing: border-box;min-height: 6em;" data-i18n-placeholder="keyword_black_list_placeholder" placeholder="${t('keyword_black_list_placeholder')}"></textarea>
+            <div style="display:flex;gap:10px">
+                <button id="confirm_forward_method_setting_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="submit_btn">${t("submit_btn")}</button>
+                <button id="close_forward_method_setting_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="cancel_btn">${t("cancel_btn")}</button>
+            </div>
+            </div>
+            `)
+                const confirmBtn = el.querySelector("#confirm_forward_method_setting_btn")
+                const closeBtn = el.querySelector("#close_forward_method_setting_btn")
+                const phoneListEl = el.querySelector('#kano_sms_forward_rules_phone_list')
+                const keywordsListEl = el.querySelector('#kano_sms_forward_rules_keywords_list')
+
+                if (phoneListEl) {
+                    phoneListEl.value = phone
+                }
+
+                if (keywordsListEl) {
+                    keywordsListEl.value = keywords
+                }
+
+                if (confirmBtn) {
+                    confirmBtn.onclick = async () => {
+                        //提交
+                        try {
+                            if (!/^[0-9\n]*$/.test(phoneListEl.value.trim())) {
+                                return createToast(t('phone_param_is_invalid'), 'pink');
+                            }
+                            const phoneList = phoneListEl.value.trim().split('\n')
+                            const keywordsList = keywordsListEl.value.trim().split('\n')
+                            const res = await (await fetch(`${KANO_baseURL}/sms_forward_blacklist`, {
+                                method: 'post',
+                                body: JSON.stringify({
+                                    keywords: keywordsList.join('\n'),
+                                    phone: phoneList.join('\n')
+                                }),
+                                headers: {
+                                    ...common_headers,
+                                    'Content-Type': 'application/json'
+                                }
+                            })).json()
+                            if (!res.result && res.error) {
+                                throw new Error(res.error)
+                            }
+                            if (res.result && res.result == 'success') {
+                                createToast(t('toast_save_success'), 'pink')
+                            }
+                        } catch (e) {
+                            createToast(t('toast_save_failed'), 'red')
+                        }
+                        close()
+                    }
+                }
+                if (closeBtn) {
+                    closeBtn.onclick = () => {
+                        close()
+                    }
+                }
+                showModal("#" + el.id)
+            } catch (e) {
+                createToast(t('client_mgmt_fetch_error'), 'red')
+                console.error(e)
+            }
+        }
+    }
+
+    // OP
+    const OP = (e) => {
+        e.preventDefault()
+        createToast(t('egg'), 'pink')
+        closeModal('#TTYDModal')
+        const TTYD = document.querySelector('#TTYD')
+        if (!TTYD) return
+        const title = TTYD.querySelector('.title strong')
+        title && (title.innerHTML = "?")
+        const list = TTYD.querySelector('.deviceList')
+        list.innerHTML = `
+        <li style = "padding:10px">
+                    <iframe src="https://cg.163.com/#/mobile" style="border:none;padding:0;margin:0;width:100%;height:600px;border-radius: 10px;overflow: hidden;opacity: 1;"></iframe>
+        </li > `
+    }
 
     //内网设置
     const initLANSettings = async () => {
@@ -4784,7 +4928,8 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
             })).json()
             if (res && res.tasks && res.tasks.length > 0) {
                 SCHEDULED_TASK_LIST.innerHTML = ''
-                res.tasks.forEach((task) => {
+                //倒转
+                res.tasks.reverse().forEach((task) => {
                     appendTaskToList(task)
                 })
             } else {
@@ -4831,7 +4976,9 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
             const json = await res.json()
             if (json.result === 'success') {
                 createToast(t('toast_save_success'), 'green')
-                closeModal('#AddTaskModal')
+                closeModal('#AddTaskModal', 300, () => {
+                    showModal("#ScheduledTasksModal")
+                })
                 handleInitialScheduledTasks()
 
                 //清除字段
@@ -4857,44 +5004,51 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         handleInitialScheduledTasks()
     }
 
-    const editTask = async (id) => {
-        clearAddTaskForm()
-        const form = document.querySelector('#AddTaskForm')
-        form.id.value = id
-        //拿取最新数据
-        try {
-            const res = await fetchWithTimeout(`${KANO_baseURL}/get_task?id=${id}`, {
-                headers: {
-                    ...common_headers,
-                    'Content-Type': 'application/json'
-                },
-            })
-            const json = await res.json()
-            //预填充表单
-            setAddTaskForm(json)
-            form.id.disabled = true // 禁止修改 ID
-            setTimeout(() => {
-                showModal('#AddTaskModal')
-            }, 100);
-        } catch (e) {
-            console.error(e)
-            createToast(t('toast_request_error'), 'red')
-        }
+    const editTask = (id) => {
+        closeModal("#ScheduledTasksModal", 300, async () => {
+            clearAddTaskForm()
+            const form = document.querySelector('#AddTaskForm')
+            form.id.value = id
+            //拿取最新数据
+            try {
+                const res = await fetchWithTimeout(`${KANO_baseURL}/get_task?id=${id}`, {
+                    headers: {
+                        ...common_headers,
+                        'Content-Type': 'application/json'
+                    },
+                })
+                const json = await res.json()
+                //预填充表单
+                setAddTaskForm(json)
+                form.id.disabled = true // 禁止修改 ID
+                setTimeout(() => {
+                    showModal('#AddTaskModal')
+                }, 100);
+            } catch (e) {
+                console.error(e)
+                createToast(t('toast_request_error'), 'red')
+            }
+        })
     }
 
     const closeAddTask = () => {
-        closeModal('#AddTaskModal')
-        setTimeout(() => {
+        closeModal('#AddTaskModal', 300, () => {
+            showModal("#ScheduledTasksModal")
             clearAddTaskForm()
-        }, 300);
+        })
     }
 
-    const fillAction = (e, actionName) => {
+    const fillAction = async (e, actionName) => {
         e.preventDefault()
         //动作列表
         const actionList = {
             "转发设备信息": {
                 "kano_do_sms_forward_action": "1"
+            },
+            "发送短信": {
+                "goformId": "SEND_SMS",
+                "Number": t("phone_number"),
+                "MessageBody": `"${t("sms_content")}"`
             },
             "指示灯": {
                 "goformId": "INDICATOR_LIGHT_SETTING",
@@ -5002,7 +5156,70 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         if (!taskAction) return
         const action = actionList[actionName]
         if (action) {
-            taskAction.value = JSON.stringify(action, null, 2)
+            if (actionName == "发送短信") {
+                if (!action.MessageBody) return
+                const { el, close } = createFixedToast('kano_sms_body', `
+                <div style="pointer-events:all;width:80vw;max-width:300px;">
+                <div class="title" style="margin:0" data-i18n="please_input_sms_body_and_phone">${t('please_input_sms_body_and_phone')}</div>
+                <input type="text" id="KANO_SMS_PHONE_NUMBER_FORWARD" style="padding:6px;width:100%;margin:10px 0" data-i18n-placeholder="phone_number" placeholder="${t("phone_number")}" ></input>
+                <textarea data-i18n-placeholder="sms_content" placeholder="${t("sms_content")}" id="KANO_SMS_TEXT_FORWARD" style="padding:4px;width:100%;box-sizing:border-box;min-height: 10em;"></textarea>
+                <div style="display:flex;gap:10px">
+                    <button id="close_sms_body_toast_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="confirm_btn">${t("confirm_btn")}</button>
+                    <button id="close_sms_body_toast_btn1" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="cancel_btn">${t("cancel_btn")}</button>
+                </div>
+                </div>
+                `, 'red')
+                const btn = el.querySelector('#close_sms_body_toast_btn')
+                const btn2 = el.querySelector('#close_sms_body_toast_btn1')
+                const phone = el.querySelector("#KANO_SMS_PHONE_NUMBER_FORWARD")
+                const text = el.querySelector("#KANO_SMS_TEXT_FORWARD")
+                const taskAction = document.querySelector("#taskAction")
+
+                if (!btn && !btn2 && !text && !phone) {
+                    close()
+                    return
+                }
+                btn2.onclick = () => {
+                    close()
+                }
+                if (taskAction) {
+                    try {
+                        const data = JSON.parse(taskAction.value.trim())
+                        phone.value = data.Number
+                        text.value = gsmDecode(data.MessageBody.trim())
+                    } catch (e) {
+                        console.log("taskAction内容解析失败", e)
+                    }
+                }
+                btn.onclick = () => {
+                    const parsedVal = gsmEncode(text.value.trim())
+                    const parsedPhone = phone.value.trim()
+                    if (isNaN(parseInt(parsedPhone))) return createToast(t("please_input_correct_phone_number"), 'pink')
+                    if (parsedVal == "" || !parsedVal) return createToast(t("sms_content_not_empty"), 'pink')
+                    action.MessageBody = parsedVal
+                    action.Number = parsedPhone
+                    taskAction.value = JSON.stringify(action, null, 2)
+                    createToast(t("toast_save_success", 'pink'))
+                    close()
+                }
+            }
+            if (actionName == "转发设备信息") {
+                try {
+                    const { enabled } = await (await fetch(`${KANO_baseURL}/sms_forward_enabled`, {
+                        method: 'GET',
+                        headers: common_headers
+                    })).json()
+                    if (enabled != "1") {
+                        return createToast(t("action_forward_dev_info_notice") + "<br>" + t("action_forward_dev_info_notice_fail"), "pink", 5000)
+                    }
+                } catch (e) {
+                    console.error("获取短信转发信息失败：", e)
+                    return createToast(t('client_mgmt_fetch_error', 'pink'))
+                }
+            }
+            if (actionName != "发送短信") {
+                taskAction.value = JSON.stringify(action, null, 2)
+            }
         }
     }
 
@@ -5335,7 +5552,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         try {
             //看看是不是开启了高级功能
             AD_RESULT.innerHTML = `<strong class="green" style="font-size: 12px;">${t('disable_update_ing')}...</strong>`
-            if (await checkAdvanceFunc()) {
+            if (await checkAdvancedFunc()) {
                 createToast(t('toast_advanced_checked'), '')
                 let res0 = await runShellWithRoot("pm disable com.zte.zdm")
                 let res1 = await runShellWithRoot("pm uninstall -k --user 0 com.zte.zdm ")
@@ -5414,8 +5631,8 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     let loopCellularTimer = null;
     let isCellularTestLooping = false;
     let totalBytes = 0;
-    let isLoopTesting = false
     let isSingleTesting = false
+    const getCellularStartBtn = () => document.querySelector('#CellularTestModal #startSpeedBtn')
     const singleTest = debounce((e) => {
         isSingleTesting = true
         if (cellularSpeedFlag) {
@@ -5429,160 +5646,168 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     }
 
     async function startCellularTestRealtime(e, flag = false) {
-        if (isLoopTesting) {
+        if (isCellularTestLooping && e) {
             return
         }
-        if (!cellularSpeedFlag) {
-            flag && (totalBytes = 0)
-        }
-        const resultEl = document.getElementById('CellularTestResult');
-        const url = document.getElementById('CellularTestUrl').value.trim();
-        const rawThreadNum = Number(document.querySelector('#thread_num').textContent);
-
-        if (!url) {
-            createToast(t('cellular_pls_input_url'), 'red');
-            return;
-        }
-
-        if (cellularSpeedFlag) {
-            // 停止测速
-            cellularSpeedController?.abort();
-            createToast(t('speedtest_aborted'), 'orange');
-            cellularSpeedFlag = false;
-            e && (e.target.innerText = t('speedtest_start_btn'));
-            return;
-        }
-
-        // 启动测速
-        cellularSpeedFlag = true;
-        cellularSpeedController = new AbortController();
-
-        const maxThreadNum = 5;
-        const batchSize = 8;
-        const threadNum = Math.min(rawThreadNum, maxThreadNum);
-
-        if (rawThreadNum > maxThreadNum) {
-            createToast(`${t('thread_imit')} ${maxThreadNum},${t('avoid_overload')}`, 'orange');
-        }
-
-        e && (e.target.innerText = t('speedtest_stop_btn'));
-        resultEl.innerHTML = `${t('speed_test_ing')} (${threadNum} ${t('thread')})...<br/><span>${t('preparing')}...</span>`;
-
-        let startTime = performance.now();
-        let lastUpdateTime = startTime;
-        let lastBytes = 0;
-        let firstResponseReceived = false;
-
-        const readTasks = [];
-
-        // 分批发起测速请求，并立即开始读取
-        for (let i = 0; i < threadNum; i++) {
-            const testUrl = `${KANO_baseURL}/proxy/--${url}?t=${Math.random()}`;
-
-            const task = (async () => {
-                try {
-                    const res = await fetch(testUrl, {
-                        signal: cellularSpeedController.signal,
-                        cache: 'no-store',
-                    });
-
-                    const reader = res.body?.getReader();
-                    if (!reader) return;
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-
-                        totalBytes += value.length;
-
-                        if (!firstResponseReceived && value.length > 0) {
-                            firstResponseReceived = true;
-                        }
-                    }
-                } catch (_) {
-                    // 忽略异常
-                }
-            })();
-
-            readTasks.push(task);
-
-            // 批处理延迟，避免同时连接过多
-            if ((i + 1) % batchSize === 0) {
-                await new Promise(res => setTimeout(res, 100));
+        const isSingleRun = flag === true
+        let runBytes = 0
+        try {
+            if (!cellularSpeedFlag) {
+                flag && (totalBytes = 0)
             }
-        }
+            const resultEl = document.getElementById('CellularTestResult');
+            const url = document.getElementById('CellularTestUrl').value.trim();
+            const rawThreadNum = Number(document.querySelector('#thread_num').textContent);
 
-        // 每 100ms 更新一次速度
-        const interval = setInterval(() => {
-            const now = performance.now();
-            const deltaTime = (now - lastUpdateTime) / 1000;
-            const deltaBytes = totalBytes - lastBytes;
-            const speedMbps = (deltaBytes * 8 / 1024 / 1024) / deltaTime;
+            if (!url) {
+                createToast(t('cellular_pls_input_url'), 'red');
+                return;
+            }
 
-            resultEl.innerHTML = `
+            if (cellularSpeedFlag) {
+                // 停止测速
+                cellularSpeedController?.abort();
+                createToast(t('speedtest_aborted'), 'orange');
+                cellularSpeedFlag = false;
+                e && (e.target.innerText = t('speedtest_start_btn'));
+                return;
+            }
+
+            // 启动测速
+            cellularSpeedFlag = true;
+            cellularSpeedController = new AbortController();
+
+            const maxThreadNum = 5;
+            const batchSize = 8;
+            const threadNum = Math.min(rawThreadNum, maxThreadNum);
+
+            if (rawThreadNum > maxThreadNum) {
+                createToast(`${t('thread_imit')} ${maxThreadNum},${t('avoid_overload')}`, 'orange');
+            }
+
+            e && (e.target.innerText = t('speedtest_stop_btn'));
+            resultEl.innerHTML = `${t('speed_test_ing')} (${threadNum} ${t('thread')})...<br/><span>${t('preparing')}...</span>`;
+
+            let startTime = performance.now();
+            let lastUpdateTime = startTime;
+            let lastBytes = 0;
+            let firstResponseReceived = false;
+
+            const readTasks = [];
+
+            // 分批发起测速请求，并立即开始读取
+            for (let i = 0; i < threadNum; i++) {
+                const testUrl = `${KANO_baseURL}/proxy/--${url}?t=${Math.random()}`;
+
+                const task = (async () => {
+                    try {
+                        const res = await fetch(testUrl, {
+                            signal: cellularSpeedController.signal,
+                            cache: 'no-store',
+                        });
+
+                        const reader = res.body?.getReader();
+                        if (!reader) return;
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+
+                            totalBytes += value.length;
+                            runBytes += value.length;
+
+                            if (!firstResponseReceived && value.length > 0) {
+                                firstResponseReceived = true;
+                            }
+                        }
+                    } catch (_) {
+                        // 忽略异常
+                    }
+                })();
+
+                readTasks.push(task);
+
+                // 批处理延迟，避免同时连接过多
+                if ((i + 1) % batchSize === 0) {
+                    await new Promise(res => setTimeout(res, 100));
+                }
+            }
+
+            // 每 100ms 更新一次速度
+            const interval = setInterval(() => {
+                const now = performance.now();
+                const deltaTime = (now - lastUpdateTime) / 1000;
+                const deltaBytes = totalBytes - lastBytes;
+                const speedMbps = (deltaBytes * 8 / 1024 / 1024) / deltaTime;
+
+                resultEl.innerHTML = `
             ${t('cellular_speed_test_thread')}${rawThreadNum}<br/>
             ${t('speedtest_current_speed')}: ${speedMbps.toFixed(2)} Mbps<br/>
             ${t('speedtest_total_download')}: ${(totalBytes / 1024 / 1024).toFixed(2)} MB
         `;
-            lastUpdateTime = now;
-            lastBytes = totalBytes;
-        }, 100);
+                lastUpdateTime = now;
+                lastBytes = totalBytes;
+            }, 100);
 
-        // 响应慢提示
-        setTimeout(() => {
-            if (!firstResponseReceived && cellularSpeedFlag) {
-                resultEl.innerHTML += `<br/><span>${t('cellular_speed_test_slow')}</span>`;
+            // 响应慢提示
+            setTimeout(() => {
+                if (!firstResponseReceived && cellularSpeedFlag) {
+                    resultEl.innerHTML += `<br/><span>${t('cellular_speed_test_slow')}</span>`;
+                }
+            }, 2000);
+
+            try {
+                await Promise.all(readTasks);
+            } catch (_) {
+                // 忽略中断异常
             }
-        }, 2000);
 
-        try {
-            await Promise.all(readTasks);
-        } catch (_) {
-            // 忽略中断异常
+            clearInterval(interval);
+            cellularSpeedFlag = false;
+            e && (e.target.innerText = t('speedtest_start_btn'));
+
+            const totalTime = (performance.now() - startTime) / 1000;
+            const avgSpeed = ((runBytes * 8) / 1024 / 1024) / totalTime;
+
+            if (runBytes === 0) {
+                resultEl.innerHTML += `<br/><span style="color:red;">${t('cellular_speed_test_failed')}</span>`;
+            } else {
+                resultEl.innerHTML += `<br/>${t('speedtest_avg_speed')}: ${avgSpeed.toFixed(2)} Mbps`;
+            }
+
+            // 循环测速
+            if (!isCellularTestLooping) return;
+            loopCellularTimer = setTimeout(() => {
+                if (isCellularTestLooping) startCellularTestRealtime(); // 不传 e
+            }, 500);
+        } finally {
+            if (isSingleRun) {
+                isSingleTesting = false
+            }
         }
-
-        clearInterval(interval);
-        cellularSpeedFlag = false;
-        e && (e.target.innerText = t('speedtest_start_btn'));
-
-        const totalTime = (performance.now() - startTime) / 1000;
-        const avgSpeed = ((totalBytes * 8) / 1024 / 1024) / totalTime;
-
-        if (totalBytes === 0) {
-            resultEl.innerHTML += `<br/><span style="color:red;">${t('cellular_speed_test_failed')}</span>`;
-        } else {
-            resultEl.innerHTML += `<br/>${t('speedtest_avg_speed')}: ${avgSpeed.toFixed(2)} Mbps`;
-        }
-
-        // 循环测速
-        if (!isCellularTestLooping) return;
-        loopCellularTimer = setTimeout(() => {
-            if (isCellularTestLooping) startCellularTestRealtime(); // 不传 e
-        }, 500);
     }
 
     const loopTest = debounce((event) => {
         const btn = event.target;
-        isCellularTestLooping = !isCellularTestLooping;
+        const startBtn = getCellularStartBtn()
 
         if (isSingleTesting) {
             return
         }
 
+        isCellularTestLooping = !isCellularTestLooping;
+
         if (isCellularTestLooping) {
             btn.innerText = t('loop_mode_stop');
             totalBytes = 0
+            startBtn && (startBtn.disabled = true)
             startCellularTestRealtime();
-            isLoopTesting = true
         } else {
             btn.innerText = t('loop_mode_start');
-            isLoopTesting = false
             clearTimeout(loopCellularTimer);
             cellularSpeedController?.abort();
             cellularSpeedFlag = false;
-            setTimeout(() => {
-                totalBytes = 0
-            }, 100);
+            startBtn && (startBtn.disabled = false)
         }
     }, 500)
 
@@ -5596,6 +5821,8 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         clearTimeout(loopCellularTimer);
         cellularSpeedController?.abort();
         cellularSpeedFlag = false;
+        const startBtn = getCellularStartBtn()
+        startBtn && (startBtn.disabled = false)
     }
 
     const onThreadNumChange = (event) => {
@@ -5678,279 +5905,144 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         })
     }
 
+    const scrollToElementWithScrollContainerAndElement = ({ scrollContainer, el, highLightKeyWord }) => {
+        // 计算 el 相对于 scrollContainer 的位置
+        const topOffset = -15
+        const elTop = el.getBoundingClientRect().top;
+        const containerTop = scrollContainer.getBoundingClientRect().top;
+        const relativeTop = elTop - containerTop + scrollContainer.scrollTop + topOffset;
+
+        // 平滑滚动到该位置
+        scrollContainer.scrollTo({
+            top: relativeTop,
+            behavior: 'smooth'
+        });
+        if (highLightKeyWord) {
+            //高亮此插件
+            let outerEl = el.parentElement
+            outerEl.style.boxShadow = '0 0 4px 1px yellow'
+            setTimeout(() => {
+                outerEl.style.boxShadow = ''
+            }, 5000);
+        }
+    }
+
     //搜索插件，滚动到合适位置
-    const scrollToElement = (elementsName = '#plugin_store .plugin-title', keyword) => {
+    const scrollToElement = (elementsName = '#plugin_store .plugin-title', keyword, highLightKeyWord = true) => {
         let found = false
+        let foundList = []
+        let scrollContainer = null
         document.querySelectorAll(elementsName).forEach(el => {
             const find = el.textContent?.toLowerCase()?.includes(keyword?.toLowerCase())
             if (find) {
                 // 找到最近的可滚动容器
-                let scrollContainer = el.parentElement;
+                scrollContainer = el.parentElement;
                 while (scrollContainer && scrollContainer.scrollHeight <= scrollContainer.clientHeight) {
                     scrollContainer = scrollContainer.parentElement;
                 }
 
                 if (scrollContainer) {
-                    // 计算 el 相对于 scrollContainer 的位置
-                    const topOffset = -15
-                    const elTop = el.getBoundingClientRect().top;
-                    const containerTop = scrollContainer.getBoundingClientRect().top;
-                    const relativeTop = elTop - containerTop + scrollContainer.scrollTop + topOffset;
-
-                    // 平滑滚动到该位置
-                    scrollContainer.scrollTo({
-                        top: relativeTop,
-                        behavior: 'smooth'
-                    });
+                    scrollToElementWithScrollContainerAndElement({
+                        scrollContainer, el, highLightKeyWord
+                    })
+                    foundList.push(el)
                     found = true
                 } else {
                     found = false
                 }
             }
         });
+
+        console.log(foundList);
+
+        if (scrollContainer) {
+            if (foundList.length > 0) {
+                scrollToElementWithScrollContainerAndElement({
+                    scrollContainer,
+                    el: foundList[0],
+                    highLightKeyWord
+                })
+            }
+        }
+
         return found
     }
 
-    const PLUGIN_STORE_SOURCE_ID_KEY = 'kano_plugin_store_source_id'
-    let pluginStoreSourcesCache = []
-
-    const fetchPluginSources = async () => {
-        try {
-            const { sources } = await (await fetchWithTimeout(`${KANO_baseURL}/plugin_sources`)).json()
-            if (Array.isArray(sources)) {
-                return sources
+    //插件市场
+    const plugin_store_modal = document.querySelector('#plugin_store')
+    plugin_store_modal.onclick = (e) => {
+        e.stopPropagation()
+        const pluginModal = document.querySelector('#PluginModal')
+        const classList = Array.from(e?.target?.classList || [])
+        const id = e.target.id
+        if (classList && classList.includes('mask')) {
+            if (id) {
+                closeModal(`#${id}`);
+                setTimeout(() => {
+                    showModal('#PluginModal')
+                }, 200);
             }
-        } catch (e) {
-            console.error("fetchPluginSources Error:", e)
-        }
-        return []
-    }
-
-    const buildPluginStoreUrl = (sourceId) => {
-        try {
-            const params = new URLSearchParams()
-            if (sourceId) params.set('sourceId', sourceId)
-            const qs = params.toString()
-            return `${KANO_baseURL}/plugins_store${qs ? `?${qs}` : ''}`
-        } catch {
-            return `${KANO_baseURL}/plugins_store`
         }
     }
 
-    const initPluginSourceSelect = async (onChange) => {
-        const select = document.querySelector('#plugin_source_select')
-        if (!select) return null
+    const plugin_store = document.querySelector('#plugin_store_btn')
+    const pluginsResultRes = []
+    let timer_input = null
+    plugin_store.onclick = (e) => {
+        //隐藏插件功能模态框
+        const pluginModal = document.querySelector('#PluginModal')
+        pluginModal.style.display = 'none'
 
-        const sources = await fetchPluginSources()
-        pluginStoreSourcesCache = sources
-
-        select.innerHTML = ''
-        sources.forEach(src => {
-            const opt = document.createElement('option')
-            opt.value = src.id
-            const name = src.name || src.id
-            opt.textContent = src.builtIn ? `${name}(${t('built_in') || '内置'})` : name
-            select.appendChild(opt)
-        })
-
-        const storedId = localStorage.getItem(PLUGIN_STORE_SOURCE_ID_KEY)
-        const selectedId = storedId && sources.some(s => s.id == storedId)
-            ? storedId
-            : (sources[0]?.id || null)
-
-        if (selectedId) {
-            select.value = selectedId
-            localStorage.setItem(PLUGIN_STORE_SOURCE_ID_KEY, selectedId)
-        }
-
-        select.onchange = () => {
-            const id = select.value
-            if (id) localStorage.setItem(PLUGIN_STORE_SOURCE_ID_KEY, id)
-            onChange && onChange(id)
-        }
-
-        return selectedId
-    }
-
-    const createPluginSourceEditorItem = (src = {}, readOnly = false) => {
-        const container = document.createElement('div')
-        container.className = 'plugin-source-item'
-        container.dataset.builtIn = src.builtIn ? '1' : '0'
-        container.dataset.id = src.id || ''
-        container.style.cssText = 'border:1px solid var(--dark-btn-disabled-color);padding:10px;border-radius:10px;margin-bottom:10px;'
-
-        const header = document.createElement('div')
-        header.style.cssText = 'display:flex;gap:10px;align-items:center;'
-
-        const title = document.createElement('strong')
-        title.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-        title.textContent = src.id ? `${src.id}${src.builtIn ? ` (${t('built_in') || '内置'})` : ''}` : (t('plugin_source_new') || 'new')
-
-        const deleteBtn = document.createElement('button')
-        deleteBtn.className = 'btn'
-        deleteBtn.textContent = t('delete')
-        deleteBtn.style.cssText = 'min-width:70px;'
-        if (readOnly) {
-            deleteBtn.disabled = true
-            deleteBtn.style.backgroundColor = 'var(--dark-btn-disabled-color)'
-        }
-        deleteBtn.onclick = () => {
-            if (readOnly) return
-            container.remove()
-        }
-
-        header.appendChild(title)
-        header.appendChild(deleteBtn)
-        container.appendChild(header)
-
-        const fields = document.createElement('div')
-        fields.style.cssText = 'margin-top:8px;display:flex;flex-direction:column;gap:6px;'
-
-        const createField = (labelText, className, value, placeholderText, type = 'text') => {
-            const row = document.createElement('div')
-            row.style.cssText = 'display:flex;gap:10px;align-items:center;'
-            const label = document.createElement('span')
-            label.textContent = labelText
-            label.style.cssText = 'min-width:90px;font-size:.75rem;opacity:.8;'
-            const input = document.createElement('input')
-            input.type = type
-            input.className = className
-            input.value = value || ''
-            input.placeholder = placeholderText || ''
-            input.disabled = readOnly
-            input.style.cssText = 'flex:1;padding:6px 10px;'
-            row.appendChild(label)
-            row.appendChild(input)
-            return row
-        }
-
-        fields.appendChild(createField(t('plugin_source_name') || 'name', 'ps-name', src.name, t('plugin_source_name')))
-        fields.appendChild(createField(t('plugin_source_download_url') || 'download', 'ps-downloadUrl', src.downloadUrl, 'https://.../d/...'))
-        fields.appendChild(createField(t('plugin_source_api_url') || 'api', 'ps-apiUrl', src.apiUrl, 'https://.../api/fs/list'))
-        fields.appendChild(createField(t('plugin_source_path') || 'path', 'ps-path', src.path, '/path'))
-        fields.appendChild(createField(t('plugin_source_password') || 'password', 'ps-password', src.password, '', 'password'))
-        container.appendChild(fields)
-
-        return container
-    }
-
-    const openPluginSourcesModal = async () => {
-        const modal = document.querySelector('#plugin_sources_modal')
-        if (!modal) return
-
-        if (!(await initRequestData())) {
-            createToast(t('toast_please_login'), 'red')
-            return
-        }
-
-        const sources = await fetchPluginSources()
-        const builtIns = sources.filter(s => s.builtIn)
-        const customs = sources.filter(s => !s.builtIn)
-
-        const builtinBlock = document.querySelector('#plugin_sources_builtin_block')
-        const customBlock = document.querySelector('#plugin_sources_custom_block')
-        if (!builtinBlock || !customBlock) return
-
-        builtinBlock.innerHTML = ''
-        customBlock.innerHTML = ''
-
-        if (builtIns.length > 0) {
-            const title = document.createElement('div')
-            title.className = 'title'
-            title.style.cssText = 'font-size:.8rem;margin:6px 0;'
-            title.textContent = t('plugin_source_builtin') || '内置源'
-            builtinBlock.appendChild(title)
-            builtIns.forEach(src => {
-                builtinBlock.appendChild(createPluginSourceEditorItem(src, true))
+        const plugin_store_close_btn = document.querySelector('#plugin_store_close_btn')
+        plugin_store_close_btn.onclick = () => {
+            closeModal('#plugin_store', 200, () => {
+                showModal('#PluginModal')
             })
         }
 
-        const customTitle = document.createElement('div')
-        customTitle.className = 'title'
-        customTitle.style.cssText = 'font-size:.8rem;margin:10px 0 6px 0;'
-        customTitle.textContent = t('plugin_source_custom') || '自定义源'
-        customBlock.appendChild(customTitle)
-        customs.forEach(src => {
-            customBlock.appendChild(createPluginSourceEditorItem(src, false))
-        })
-
-        const addBtn = document.querySelector('#plugin_sources_add_btn')
-        addBtn && (addBtn.onclick = (e) => {
-            e.preventDefault()
-            customBlock.appendChild(createPluginSourceEditorItem({
-                id: '',
-                name: '',
-                downloadUrl: '',
-                apiUrl: '',
-                path: '',
-                password: '',
-                builtIn: false,
-            }, false))
-        })
-
-        const saveBtn = document.querySelector('#plugin_sources_save_btn')
-        saveBtn && (saveBtn.onclick = async (e) => {
-            e.preventDefault()
-            try {
-                const payload = []
-                const cards = Array.from(customBlock.querySelectorAll('.plugin-source-item'))
-                    .filter(el => el.dataset.builtIn !== '1')
-
-                cards.forEach(el => {
-                    const id = el.dataset.id || ''
-                    const name = el.querySelector('.ps-name')?.value?.trim() || ''
-                    const downloadUrl = el.querySelector('.ps-downloadUrl')?.value?.trim() || ''
-                    const apiUrl = el.querySelector('.ps-apiUrl')?.value?.trim() || ''
-                    const path = el.querySelector('.ps-path')?.value?.trim() || ''
-                    const password = el.querySelector('.ps-password')?.value?.trim() || ''
-                    if (!downloadUrl) {
-                        return
+        const pluginSearchInputEl = document.querySelector("#pluginSearchInput")
+        if (pluginSearchInputEl) {
+            const searchListEl = document.querySelector("#plugin_store .searchList")
+            if (searchListEl) {
+                pluginSearchInputEl.oninput = (e) => {
+                    const keyword = e.target.value.trim()
+                    const foundList = []
+                    searchListEl.innerHTML = ''
+                    if (pluginsResultRes.length > 0) {
+                        pluginsResultRes.forEach(el => {
+                            let name_lower = el.name.toLowerCase()
+                            let keyword_lower = keyword.toLowerCase()
+                            if (keyword_lower && name_lower.includes(keyword_lower)) {
+                                foundList.push(el)
+                            }
+                        })
                     }
-                    payload.push({
-                        id,
-                        name,
-                        downloadUrl,
-                        apiUrl,
-                        path,
-                        password,
-                    })
-                })
-
-                const res = await (await fetchWithTimeout(`${KANO_baseURL}/plugin_sources`, {
-                    method: 'POST',
-                    body: JSON.stringify({ sources: payload }),
-                }, 10000)).json()
-
-                if (res.result == 'success') {
-                    createToast(t('toast_save_success'), 'green')
-                    closeModal('#plugin_sources_modal')
-                    await initPluginSourceSelect((id) => loadPluginStorePlugins(id))
-                    const select = document.querySelector('#plugin_source_select')
-                    if (select?.value) {
-                        loadPluginStorePlugins(select.value)
+                    if (foundList.length) {
+                        searchListEl.style.display = 'block'
+                        foundList.forEach(el => {
+                            const itemEl = document.createElement("div")
+                            itemEl.className = "searchListItem"
+                            itemEl.innerHTML = el.name
+                            itemEl.onclick = () => {
+                                pluginSearchInputEl.value = el.name
+                                document.querySelector("#pluginSearchBtn").click()
+                            }
+                            searchListEl.appendChild(itemEl)
+                        })
+                    } else {
+                        searchListEl.style.display = 'none'
                     }
-                } else {
-                    createToast(t('toast_save_failed') || 'save failed', 'red')
                 }
-            } catch (err) {
-                console.error(err)
-                createToast(t('toast_save_failed') || 'save failed', 'red')
+                pluginSearchInputEl.onblur = () => {
+                    timer_input && clearTimeout(timer_input)
+                    timer_input = setTimeout(() => {
+                        searchListEl.style.display = 'none'
+                    }, 200);
+                }
             }
-        })
-
-        const closeBtn = document.querySelector('#plugin_sources_close_btn')
-        closeBtn && (closeBtn.onclick = (e) => {
-            e.preventDefault()
-            closeModal('#plugin_sources_modal')
-        })
-
-        showModal('#plugin_sources_modal')
-    }
-
-    const loadPluginStorePlugins = (sourceId) => {
+        }
+        showModal('#plugin_store')
         const items = document.querySelector('#plugin_store .plugin-items')
-        if (!items) return
-
         //loading
         items.innerHTML = `
         <li style="padding-top: 15px;overflow:hidden">
@@ -5960,15 +6052,17 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
             </strong>
         </li>
         `
-
         const total = document.querySelector('#plugin_store .total')
-        fetchWithTimeout(buildPluginStoreUrl(sourceId))
+        //加载插件
+        pluginsResultRes.length = 0
+        fetchWithTimeout(`${KANO_baseURL}/plugins_store`)
             .then(res => res.json())
             .then(({ res, download_url }) => {
                 const data = res.data || {}
                 items.innerHTML = ''
                 if (data && data.content && data.content.length > 0) {
-                    total && (total.innerHTML = `${t('plugin_modal_num')}: ${data.content.length}`)
+                    pluginsResultRes.push(...data.content)
+                    total.innerHTML = `${t('plugin_modal_num')}: ${data.content.length}`
                     //分页
                     const pageSize = 10
                     const totalPages = Math.ceil(data.content.length / pageSize)
@@ -6031,7 +6125,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                             nextPageBtn.style.backgroundColor = ''
                             cur_page_el.innerHTML = pageNum + 1
                             renderPluginItems(data.content.slice(pageNum * pageSize, pageNum * pageSize + pageSize), download_url)
-                            scrollToElement('#plugin_store .plugin-title', data.content[0].name)
+                            scrollToElement('#plugin_store .plugin-title', data.content[0].name, false)
                         }
 
                         if (!keyword || keyword == '') {
@@ -6039,6 +6133,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                         }
 
                         //寻找存在的页面页码并跳转
+
                         const cur_index = data.content.findIndex(plugin => {
                             return plugin.name?.toLowerCase()?.includes(keyword?.toLowerCase())
                         })
@@ -6082,51 +6177,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
                 console.error(err)
                 items.innerHTML = `<li style="padding:10px">${t('error_loading_plugins')}</li>`
             })
-    }
 
-    //插件市场
-    const plugin_store_modal = document.querySelector('#plugin_store')
-    plugin_store_modal.onclick = (e) => {
-        e.stopPropagation()
-        const pluginModal = document.querySelector('#PluginModal')
-        const classList = Array.from(e?.target?.classList || [])
-        const id = e.target.id
-        if (classList && classList.includes('mask')) {
-            if (id) {
-                closeModal(`#${id}`);
-                setTimeout(() => {
-                    showModal('#PluginModal')
-                }, 200);
-            }
-        }
-    }
-
-    const plugin_store = document.querySelector('#plugin_store_btn')
-    plugin_store.onclick = async (e) => {
-        //隐藏插件功能模态框
-        const pluginModal = document.querySelector('#PluginModal')
-        pluginModal.style.display = 'none'
-
-        const plugin_store_close_btn = document.querySelector('#plugin_store_close_btn')
-        plugin_store_close_btn.onclick = () => {
-            closeModal('#plugin_store')
-            setTimeout(() => {
-                showModal('#PluginModal')
-            }, 200);
-        }
-
-        showModal('#plugin_store')
-
-        // init plugin source selector + reload on change
-        const selectedId = await initPluginSourceSelect((id) => loadPluginStorePlugins(id))
-        loadPluginStorePlugins(selectedId)
-
-        // plugin source manager
-        const manageBtn = document.querySelector('#plugin_source_manage_btn')
-        manageBtn && (manageBtn.onclick = async (ev) => {
-            ev.preventDefault()
-            await openPluginSourcesModal()
-        })
     }
 
     const handlePluginStoreSearchInput = (e) => {
@@ -6139,7 +6190,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     }
 
     const handleForceIMEI = async () => {
-        if (!await checkAdvanceFunc()) return createToast(t("need_advance_func"), 'red')
+        if (!await checkAdvancedFunc()) return createToast(t("need_advance_func"), 'red')
         const AT_RESULT = document.querySelector('#AT_RESULT')
         if (AT_RESULT) {
             AT_RESULT.innerHTML = t('toast_running_please_wait')
@@ -6166,10 +6217,69 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     }
     getSELinuxStatus()
 
-    const initCheckWeakToken = async () => {
-        // 已禁用弱口令弹窗提示（仅保留修改口令功能入口，由用户自行决定是否修改）
-        return null
+    const initTerms = async () => {
         if (!(await initRequestData())) {
+            return null
+        }
+        // 用户协议
+        const md = createModal({
+            name: "kano_terms",
+            noBlur: true,
+            isMask: true,
+            title: t('useTermsTitle'),
+            contentStyle: "font-size:12px",
+            confirmBtnText: t('accept'),
+            closeBtnText: t('decline'),
+            onClose: () => {
+                createToast(t('please_accept_terms'))
+                return false
+            },
+            onConfirm: () => {
+                const text = document.querySelector("#kano_term_confirm_text")
+                // 哎呀，你怎么又没认真看😯
+                if (text.value.trim() != t("term_confirm_text")) {
+                    createToast(t('please_read_terms'))
+                    return false
+                }
+                fetchWithTimeout(`${KANO_baseURL}/accept_terms`, {
+                    method: "post",
+                    headers: common_headers,
+                }).then(r => r.json()).then(res => {
+                    if (res.result == "success") {
+                        createToast(t('accept'))
+                    }
+                }).finally((res) => {
+                    //同意后检查弱口令
+                    initCheckWeakToken()
+                })
+                return true
+            },
+            content: `${t('useTerms')}<div style="font-size: .9rem;margin-top: 10px;"><span>${t('please_input')}:"${t('term_confirm_text')}"</span><input id="kano_term_confirm_text" type="text" style="width: 100%;margin: 6px 0;padding: 6px;"></div>`
+        })
+        const cache = localStorage.getItem('read_terms')
+        try {
+            if (await getTermsAcceptance()) {
+                if (cache != "1") {
+                    localStorage.setItem('read_terms', '1')
+                }
+                return
+            }
+            showModal(md.id)
+        } catch {
+            if (cache != "1" && cache != null && cache != undefined) {
+                showModal(md.id)
+            }
+        }
+    }
+    initTerms()
+
+    const initCheckWeakToken = async () => {
+        if (!(await initRequestData())) {
+            return null
+        }
+
+        // 没同意用户许可就不要显示
+        if (!(await getTermsAcceptance())) {
             return null
         }
 
@@ -6227,9 +6337,66 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     }
     initCheckWeakToken()
 
+    // 获取消息
+    const initMessage = async () => {
+        if (!(await initRequestData())) {
+            return null
+        }
+        try {
+            const api = 'https://api.kanokano.cn/ufi_tools_report'
+            const { device_id: uuid } = await (await fetch(`${KANO_baseURL}/device_id`, {
+                headers: common_headers
+            })).json()
+            if (uuid) {
+                const { message, has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/get_message/${uuid}`, {
+                    headers: common_headers
+                })).json()
+                if (has_read_message == true || has_read_message == "true") return
+                const { text } = parseDOM(message) //过滤掉远程任何的script脚本，防止远程任意代码自动执行
+                const { el, close } = createFixedToast('kano_message', `
+                    <div style="pointer-events:all;width:80vw;max-width:300px">
+                        <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
+                        <div style="margin:10px 0" id="kano_message_inner">${text}</div>
+                        <div style="text-align:right">
+                            <button style="font-size:.64rem" id="close_message_btn" data-i18n="pay_btn_dismiss">${t('pay_btn_dismiss')}</button>
+                        </div>
+                    </div>
+                    `)
+                const btn = el.querySelector('#close_message_btn')
+                if (!btn) {
+                    close()
+                    return
+                }
+                btn.onclick = async () => {
+                    try {
+                        const { has_read_message } = await (await fetch(`${KANO_baseURL}/proxy/--${api}/set_read_message/${uuid}`, {
+                            method: 'post',
+                            headers: common_headers
+                        })).json()
+                        if (has_read_message) {
+                            close()
+                        }
+                    } catch {
+                        try {
+                            const { has_read_message } = await (await fetch(`${api}/set_read_message/${uuid}`, {
+                                method: 'post'
+                            })).json()
+                            if (has_read_message) {
+                                close()
+                            }
+                        } catch { }
+                    } finally {
+                        close()
+                    }
+                }
+            }
+        } catch { }
+    }
+    initMessage()
+
     const togglePort = async (port, flag, isBootup = false, v6 = false) => {
         try {
-            if (!await checkAdvanceFunc()) {
+            if (!await checkAdvancedFunc()) {
                 createToast(t("need_advance_func"), 'red');
                 return false;
             }
@@ -6299,7 +6466,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     const dev_ipv6 = document.querySelector("#dev_ipv6")
 
     const toggleTTYD = async (flag) => {
-        if (!await checkAdvanceFunc()) return createToast(t("need_advance_func"), 'red')
+        if (!await checkAdvancedFunc()) return createToast(t("need_advance_func"), 'red')
         const bootUp = dev_bootup.checked
         const v6 = dev_ipv6.checked
         const res = togglePort("1146", flag, bootUp, v6)
@@ -6308,7 +6475,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     }
 
     const toggleADBIP = async (flag) => {
-        if (!await checkAdvanceFunc()) return createToast(t("need_advance_func"), 'red')
+        if (!await checkAdvancedFunc()) return createToast(t("need_advance_func"), 'red')
         const bootUp = dev_bootup.checked
         const v6 = dev_ipv6.checked
         const res = togglePort("5555", flag, bootUp, v6)
@@ -6338,11 +6505,63 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         if (port != '1146') {
             localStorage.setItem('ttyd_port', '1146')
             initTTYD && initTTYD()
+            createToast(t('toast_oprate_success'), '')
+        }
+    }
+    let clearUppBtnCounter = 0
+    let clearUppBtnTimer = null
+    const clearAPPUploadData = async () => {
+        clearUppBtnCounter++
+        if (clearUppBtnCounter <= 3) {
+            clearUppBtnTimer && clearTimeout(clearUppBtnTimer)
+            clearUppBtnTimer = setTimeout(() => {
+                clearUppBtnCounter = 0
+            }, 5000);
+            return createToast('Click {num} times to confirm'.replace('{num}', (4 - clearUppBtnCounter)), 'pink', 3000)
+        }
+        clearUppBtnCounter = 0
+
+        const res = await fetchWithTimeout(`${KANO_baseURL}/delete_all_uploads_data`, {
+            method: 'post',
+            headers: common_headers
+        })
+        const { result, deleted_list } = await res.json()
+        if (result != "success") {
+            createToast(t("toast_oprate_failed"), "red")
+            return
+        }
+        if (deleted_list) {
+            let listString = ''
+            for (let key in deleted_list) {
+                listString += `${key}: <b>${deleted_list[key] ? 'OK' : "FAILED"}</b><br>`
+            }
+            if (listString.trim() == '') {
+                createToast(t('toast_oprate_success'), '')
+                return
+            }
+            const { el, close } = createFixedToast('kano_del_appdata_success', `
+                <div style="pointer-events:all;width:80vw;max-width:400px;">
+                <div class="title" style="margin:0" data-i18n="system_notice">${t('system_notice')}</div>
+                <p>${listString}</p>
+                <div style="display:flex;gap:10px">
+                    <button id="confirm_kano_del_appdata_toast_btn" style="width:100%;font-size:.64rem;margin-top:5px" data-i18n="close_btn">${t("close_btn")}</button>
+                </div>
+                </div>
+                `, 'red')
+            const close_btn = el.querySelector("#confirm_kano_del_appdata_toast_btn")
+
+            if (close_btn) {
+                close_btn.onclick = () => {
+                    close()
+                }
+            }
+        } else {
+            createToast(t('toast_oprate_success'), '')
         }
     }
 
     const setPort = async (flag) => {
-        if (!await checkAdvanceFunc()) return createToast(t("need_advance_func"), 'red')
+        if (!await checkAdvancedFunc()) return createToast(t("need_advance_func"), 'red')
         const port = port_iptables.value
         const bootUp = dev_bootup.checked
         const v6 = dev_ipv6.checked
@@ -6890,13 +7109,13 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
             if (!res) { throw new Error('No data') }
             let isGadgetMode = res.details.typec_mode == "gadget"
             el.innerHTML = `<div style="display: flex;margin-bottom:10px;flex-direction:column"><div>${t('max_speed')}：${isGadgetMode ? res.details.gadget_speed : formatSpeed(res.maxSpeed)}</div><div>${t('usb_status')}：${res.details.typec_mode}/${!isGadgetMode ? t('host_usb_exp') : t('device_usb_exp')}</div></div>
-                    <ul class="deviceList" style="display: flex;flex-direction: column;gap: 10px;">
-                        ${res.details.devices.map(device => `<li style="padding: 10px;">
+            <ul class="deviceList" style="display: flex;flex-direction: column;gap: 10px;">
+                ${res.details.devices.map(device => `<li style="padding: 10px;">
                             <div>${t('path')}：${device.path}</div>
                             <div>${t('device_name')}： ${device.product}</div>
                             <div>${t('speed')}：${formatSpeed(device.speed)}</div>
                         </li>`).join('')}
-                    </ul>`.trim()
+            </ul>`.trim()
         } catch {
             el.innerHTML = `<div style="text-align:center;padding:20px 0">${t('no_usb_list')}</div>`
         }
@@ -6927,6 +7146,139 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         closeModal('#USBStatusModal', 300, () => {
             stopRefreshUSBStatusInterval && stopRefreshUSBStatusInterval()
         })
+    }
+
+    const handleOpenUploadFilesList = async () => {
+        let res = await runShellWithUser(`ls /data/data/com.minikano.f50_sms/files/uploads/`)
+        if (!res.success) return createToast(t('read_file_fail'), 'red')
+        if (res.content && res.content.content && res.content.content.split("\n") && res.content.content.split("\n").length) {
+            let { el, close } = createFixedToast('kano_edit_ufi_media_file_list_message', `
+                <div style="pointer-events:all;width:90vw;max-width:800px;">
+                    <div class="title" style="margin:0" data-i18n="file_manager">${t("file_manager")}</div>
+                    <div style="margin:10px 0;display: flex;flex-direction: column;gap: 6px;max-height: 50vh;overflow: auto;font-size: .7rem;" class="inner">
+                      ${res.content.content.split('\n').map(item => (item.trim() ? `<div class="kano_uploads_file_item" data-item="${item}" style="padding: 10px 10px;background: var(--dark-tag-color);border-radius: 6px;display:flex;align-items: center;">
+                      <span onclick="copyText({target:{innerText:'/api/uploads/${item}'}})" style="flex:1;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">${item}</span>
+                      <button style="margin-right:6px;padding: 0;display: flex;" onclick="downloadUrl('/api/uploads/${item}','${item}')"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" t="1770319174878" viewBox="0 0 1024 1024" version="1.1" p-id="1583" width="20" height="20"><path d="M896 672c-17.066667 0-32 14.933333-32 32v128c0 6.4-4.266667 10.666667-10.666667 10.666667H170.666667c-6.4 0-10.666667-4.266667-10.666667-10.666667v-128c0-17.066667-14.933333-32-32-32s-32 14.933333-32 32v128c0 40.533333 34.133333 74.666667 74.666667 74.666667h682.666666c40.533333 0 74.666667-34.133333 74.666667-74.666667v-128c0-17.066667-14.933333-32-32-32z" fill="var(--dark-text-color)" p-id="1584"/><path d="M488.533333 727.466667c6.4 6.4 14.933333 8.533333 23.466667 8.533333s17.066667-2.133333 23.466667-8.533333l213.333333-213.333334c12.8-12.8 12.8-32 0-44.8-12.8-12.8-32-12.8-44.8 0l-157.866667 157.866667V170.666667c0-17.066667-14.933333-32-32-32s-34.133333 14.933333-34.133333 32v456.533333L322.133333 469.333333c-12.8-12.8-32-12.8-44.8 0-12.8 12.8-12.8 32 0 44.8l211.2 213.333334z" fill="var(--dark-text-color)" p-id="1585"/></svg></button>
+                      <button style="margin-right:6px;padding: 0;display: flex;" onclick="openLink('/api/uploads/${item}')"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" t="1770319810359" viewBox="0 0 1024 1024" version="1.1" p-id="3490" width="20" height="20"><path d="M942.2 486.2C847.4 286.5 704.1 186 512 186c-192.2 0-335.4 100.5-430.2 300.3-7.7 16.2-7.7 35.2 0 51.5C176.6 737.5 319.9 838 512 838c192.2 0 335.4-100.5 430.2-300.3 7.7-16.2 7.7-35 0-51.5zM512 766c-161.3 0-279.4-81.8-362.7-254C232.6 339.8 350.7 258 512 258c161.3 0 279.4 81.8 362.7 254C791.5 684.2 673.4 766 512 766z" p-id="3491" fill="var(--dark-text-color)"/><path d="M508 336c-97.2 0-176 78.8-176 176s78.8 176 176 176 176-78.8 176-176-78.8-176-176-176z m0 288c-61.9 0-112-50.1-112-112s50.1-112 112-112 112 50.1 112 112-50.1 112-112 112z" p-id="3492" fill="var(--dark-text-color)"/></svg></button>
+                      <button class="delete_file" style="padding: 0;display: flex;"><svg width="20px" height="20px" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"><path fill="var(--dark-text-color)" d="M736 352.032L736.096 800h-0.128L288 799.968 288.032 352 736 352.032zM384 224h256v64h-256V224z m448 64h-128V202.624C704 182.048 687.232 160 640.16 160h-256.32C336.768 160 320 182.048 320 202.624V288H192a32 32 0 1 0 0 64h32V799.968C224 835.296 252.704 864 288.032 864h447.936A64.064 64.064 0 0 0 800 799.968V352h32a32 32 0 1 0 0-64z"></path><path fill="var(--dark-text-color)" d="M608 690.56a32 32 0 0 0 32-32V448a32 32 0 1 0-64 0v210.56a32 32 0 0 0 32 32M416 690.56a32 32 0 0 0 32-32V448a32 32 0 1 0-64 0v210.56a32 32 0 0 0 32 32"></path></svg></button></div>` : "")).join('')}
+                    </div>
+                    <div style="text-align:right">
+                        <button style="font-size:.64rem" id="upload_media_file_btn" data-i18n="upload_file_limit_100mb">${t('upload_file_limit_100mb')}</button>
+                        <button style="font-size:.64rem" id="close_edit_media_file_list_message_btn" data-i18n="close_btn">${t('close_btn')}</button>
+                    </div>
+                </div>
+                `)
+
+            //文件列表
+            let filesEl = document.querySelectorAll('#kano_edit_ufi_media_file_list_message .kano_uploads_file_item')
+            filesEl.forEach(el => {
+                let data = el.dataset.item
+                if (data && data.trim()) {
+                    let elBtn = el.querySelector('.delete_file')
+                    if (!elBtn) return
+                    let delCountDown = 3
+                    let delTimer = null
+                    elBtn.onclick = async () => {
+                        let delFile = data.trim()
+                        delCountDown--
+                        delTimer && clearTimeout(delTimer)
+                        delTimer = setTimeout(() => {
+                            delCountDown = 3
+                        }, 3000);
+                        if (delCountDown > 0) {
+                            createToast(t('click_times_to_delete').replaceAll("$count$", ` ${delCountDown} `))
+                            return
+                        }
+                        delCountDown = 3
+                        try {
+                            const { result, error } = await (await fetchWithTimeout(`${KANO_baseURL}/delete_img`, {
+                                method: "POST",
+                                headers: common_headers,
+                                body: JSON.stringify({
+                                    file_name: delFile
+                                })
+                            })).json()
+                            if (result == "success") {
+                                createToast(t('toast_delete_success'), "pink")
+                                el.remove()
+                            } else {
+                                createToast(t('toast_delete_failed') + error, "red")
+                            }
+                        } catch (e) {
+                            createToast(t('toast_delete_failed') + e, "red")
+                        }
+                    }
+                }
+            })
+            let btn = el.querySelector('#close_edit_media_file_list_message_btn')
+            let uploadBtn = el.querySelector('#upload_media_file_btn')
+
+            if (!btn) {
+                close()
+                return
+            }
+            btn.onclick = async () => {
+                close()
+            }
+
+            if (uploadBtn) {
+                uploadBtn.onclick = () => {
+                    let fileInput = document.createElement('input')
+                    fileInput.type = "file"
+                    const handleFileChange = async (event) => {
+                        let file = event.target.files[0];
+                        if (!file) return
+                        let url = await uploadFileKano(file, true)
+                        if (!url) return
+                        createToast(`${url} ${t('toast_upload_success')}!`, "pink", 8000)
+                        close()
+                        setTimeout(() => {
+                            handleOpenUploadFilesList()
+                        }, 400);
+                        fileInput.removeEventListener('change', handleFileChange);
+                        fileInput = null;
+                    }
+                    fileInput.addEventListener('change', handleFileChange)
+                    fileInput.click()
+                }
+            }
+
+
+        } else {
+            createToast(t('no_file'), 'pink')
+        }
+    }
+
+    const showNetConnInfoModal = async () => {
+        if (!(await initRequestData())) {
+            createToast(t('toast_please_login'), 'red')
+            return null
+        }
+        const id = "#kano_net_info_modal"
+        const res = await getNetConnInfo()
+        let intervalFn = requestInterval(() => {
+            getNetConnInfo().then(res => {
+                const contentEl = document.querySelector('#kano_net_info_modal .content')
+                if (contentEl) {
+                    contentEl.innerHTML = renderConnectStatusContent(res)
+                }
+            })
+        }, REFRESH_TIME + 114, id)
+        const md = createModal({
+            showConfirm: false,
+            name: id.replace('#', ''),
+            isMask: false,
+            titleI18nKey: 'network_conn_info',
+            title: t('network_conn_info'),
+            maxWidth: "400px",
+            contentStyle: "font-size:.7rem;line-height:1.5",
+            onClose: () => {
+                intervalFn && intervalFn()
+                return true
+            },
+            content: renderConnectStatusContent(res)
+        })
+        md.id && showModal(md.id)
     }
 
     //官方后台貌似对PIN超出次数的判定有问题，PIN次数用完后提示输入PUK，此时换卡也不会变更状态，用户只能恢复出厂设置，所以此功能不会继续实现
@@ -7031,6 +7383,9 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     // initSimCardPin()
     //挂载方法到window
     const methods = {
+        showNetConnInfoModal,
+        handleOpenUploadFilesList,
+        clearAPPUploadData,
         closeUSBStatusModal,
         onCloseChangeTokenForm,
         handleChangeToken,
@@ -7073,6 +7428,7 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         changeRefreshRate,
         onPluginBtn,
         handlePluginFileUpload,
+        OP,
         onLANModalSubmit,
         switchSmsForwardMethodTab,
         handleSmsForwardCurlForm,
@@ -7081,7 +7437,6 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         handleShell,
         handleDownloadSoftwareLink,
         handleUpdateSoftware,
-        openDevMenu,
         enableTTYD,
         changeNetwork,
         changeUSBNetwork,
@@ -7111,13 +7466,14 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         onCloseChangePassForm,
         startTest,
         handleLoopMode,
+        onClosePayModal,
         handleTTYDFormSubmit,
         handleQosAT,
         handleSambaPath,
         handleAT,
         setOrRemoveDeviceFromBlackList,
         onSelectCellRow,
-        showNetConnInfoModal,
+        handleClosePayModal,
         toggleCellInfoRefresh
     }
 
