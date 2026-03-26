@@ -16,7 +16,6 @@ import androidx.core.app.NotificationCompat
 import com.minikano.f50_sms.configs.AppMeta
 import com.minikano.f50_sms.utils.BatteryReceiver
 import com.minikano.f50_sms.utils.KanoLog
-import com.minikano.f50_sms.utils.KanoReport.Companion.reportToServer
 import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.KanoUtils.Companion.isUsbDebuggingEnabled
 import com.minikano.f50_sms.utils.ShellKano
@@ -26,12 +25,7 @@ import com.minikano.f50_sms.utils.SmbThrottledRunner
 import com.minikano.f50_sms.utils.SmsInfo
 import com.minikano.f50_sms.utils.SmsPoll
 import com.minikano.f50_sms.utils.TaskSchedulerManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 class ADBService : Service() {
     private lateinit var runnable: Runnable
@@ -65,10 +59,9 @@ class ADBService : Service() {
             // 等文件拷贝完成后再继续
             startAdbKeepAliveTask(applicationContext)
             startIperfTask(applicationContext)
-            val executor = Executors.newFixedThreadPool(3)
+            val executor = Executors.newFixedThreadPool(2)
             executor.execute(runnableSMS)
             executor.execute(runnableSMB)
-            executor.execute(runnableRPT)
             //订阅电池事件接收器
             registerBatteryReceiver()
         }
@@ -163,31 +156,6 @@ class ADBService : Service() {
                 }
             }
             handler.postDelayed(this, 5000)
-        }
-    }
-
-    private val rptScope =
-        CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    @Volatile
-    private var rptRunning = false
-    private val runnableRPT = object : Runnable {
-        override fun run() {
-            if (rptRunning) {
-                KanoLog.w(TAG, "上一次 RPT 还未完成，跳过本次")
-            } else {
-                rptScope.launch {
-                    rptRunning = true
-                    try {
-                        KanoLog.d(TAG, "周期性发送状态中...")
-                        reportToServer()
-                    } catch (e: Exception) {
-                        KanoLog.e(TAG, "发送状态时发生错误：", e)
-                    } finally {
-                        rptRunning = false
-                    }
-                }
-            }
-            handler.postDelayed(this, TimeUnit.HOURS.toMillis(5))
         }
     }
 
