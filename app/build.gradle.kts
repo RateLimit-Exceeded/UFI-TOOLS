@@ -80,6 +80,9 @@ val buildGoShellTools by tasks.registering {
     }
 }
 
+// FileCollection wrapper that carries the correct task dependency for any consumer (e.g. lint model writer).
+val goGeneratedAssets: FileCollection = files(goGeneratedAssetsDir).builtBy(buildGoShellTools)
+
 // 注册执行 npm 命令的任务
 val npmBuild by tasks.registering(Exec::class) {
     workingDir = file("frontEnd")
@@ -119,6 +122,14 @@ tasks.configureEach {
     }
 }
 
+// AGP/Gradle validation: lint model writer tasks also read the assets source dirs.
+// Without an explicit dependency, Gradle 8+ fails the build due to "implicit dependency" on goGeneratedAssetsDir.
+tasks.matching {
+    it.name.startsWith("generate") && it.name.contains("Lint") && it.name.endsWith("ReportModel")
+}.configureEach {
+    dependsOn(buildGoShellTools)
+}
+
 tasks.register<Delete>("deleteDumpSymsFromApk") {
     delete(file("${layout.buildDirectory}/intermediates/merged_assets/release/out/dump_syms"))
     delete(file("${layout.buildDirectory}/intermediates/merged_assets/debug/out/dump_syms"))
@@ -153,7 +164,7 @@ android {
 
     sourceSets {
         // Add generated Go assets (assets/shell/*). The original assets directory remains enabled.
-        getByName("main").assets.srcDir(goGeneratedAssetsDir)
+        getByName("main").assets.srcDir(goGeneratedAssets)
     }
 
     defaultConfig {
