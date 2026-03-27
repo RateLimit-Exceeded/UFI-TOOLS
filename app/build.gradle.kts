@@ -11,6 +11,75 @@ plugins {
     kotlin("plugin.serialization")
 }
 
+// ---------------- Go-based shell tools (built from source) ----------------
+//
+// This project ships some helper executables in assets/shell/* which are executed on-device
+// after being copied to filesDir (see ADBService.resetFilesFromAssets -> KanoUtils.copyAssetsRecursively).
+//
+// To avoid committing opaque prebuilt binaries, we compile the Go tools at build time and place
+// them into a generated assets directory, then include that directory in the APK assets merge.
+//
+// Required host dependency for building APK: `go` in PATH (handled in CI via actions/setup-go).
+val goToolsDir = rootProject.file("tools/go")
+val goGeneratedAssetsDir = layout.buildDirectory.dir("generated/goAssets").get().asFile
+val goGeneratedShellDir = File(goGeneratedAssetsDir, "shell")
+
+val goToolSources: Map<String, File> = mapOf(
+    // filename in assets/shell -> Go source entrypoint
+    "sha256" to File(goToolsDir, "sha256/main.go"),
+    "ufi_req" to File(goToolsDir, "ufi_req/main.go"),
+    "zreq" to File(goToolsDir, "zreq/main.go"),
+    "sendat" to File(goToolsDir, "sendat/main.go"),
+)
+
+val buildGoShellTools by tasks.registering {
+    group = "build"
+    description = "Build Go helper executables into generated APK assets (assets/shell/*)"
+
+    inputs.files(goToolSources.values)
+    outputs.dir(goGeneratedAssetsDir)
+
+    doLast {
+        goGeneratedShellDir.mkdirs()
+
+        // Cross-compile: pure Go, static linux/arm64 binaries are runnable on Android (same kernel ABI).
+        // This matches the existing approach of shipping standalone ELF tools in assets.
+        val env = mapOf(
+            "GOOS" to "linux",
+            "GOARCH" to "arm64",
+            "CGO_ENABLED" to "0",
+        )
+
+        // Ensure Go exists (gives a clearer error early).
+        exec {
+            environment(env)
+            commandLine("go", "version")
+        }
+
+        goToolSources.forEach { (outName, src) ->
+            if (!src.exists()) {
+                throw GradleException("Go source not found: ${src.absolutePath}")
+            }
+
+            val outFile = File(goGeneratedShellDir, outName)
+            // Always rebuild to keep outputs deterministic with current source.
+            if (outFile.exists()) outFile.delete()
+
+            exec {
+                environment(env)
+                commandLine(
+                    "go", "build",
+                    "-trimpath",
+                    "-buildvcs=false",
+                    "-ldflags", "-s -w",
+                    "-o", outFile.absolutePath,
+                    src.absolutePath
+                )
+            }
+        }
+    }
+}
+
 // 注册执行 npm 命令的任务
 val npmBuild by tasks.registering(Exec::class) {
     workingDir = file("frontEnd")
@@ -40,6 +109,13 @@ val npmBuild by tasks.registering(Exec::class) {
 tasks.configureEach {
     if (name.startsWith("assemble") || name.startsWith("install") || name == "build") {
         dependsOn(npmBuild)
+    }
+}
+
+// Ensure Go tools exist before assets are merged into the APK.
+tasks.configureEach {
+    if (name.startsWith("merge") && name.endsWith("Assets")) {
+        dependsOn(buildGoShellTools)
     }
 }
 
@@ -74,6 +150,11 @@ val hasReleaseSigningConfig = listOf(
 android {
     namespace = "com.minikano.f50_sms"
     compileSdk = 35
+
+    sourceSets {
+        // Add generated Go assets (assets/shell/*). The original assets directory remains enabled.
+        getByName("main").assets.srcDir(goGeneratedAssetsDir)
+    }
 
     defaultConfig {
         applicationId = "com.minikano.f50_sms"
@@ -132,7 +213,9 @@ android {
                 "assets/node_modules/**",
                 "assets/dev-server.js",
                 "assets/package-lock.json",
-                "assets/package.json"
+                "assets/package.json",
+                // Safety: never package Go source files even if someone adds them under assets.
+                "assets/**/*.go",
             )
         }
     }

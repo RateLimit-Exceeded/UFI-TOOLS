@@ -24,6 +24,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
       - name: Install Node.js dependencies
         working-directory: app/frontEnd
         run: npm install --no-package-lock
