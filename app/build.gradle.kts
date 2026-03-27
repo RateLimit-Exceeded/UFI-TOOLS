@@ -130,6 +130,11 @@ tasks.matching {
     dependsOn(buildGoShellTools)
 }
 
+// Lint analysis/report tasks also read assets. Make the dependency explicit to satisfy Gradle validation.
+tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach {
+    dependsOn(buildGoShellTools)
+}
+
 tasks.register<Delete>("deleteDumpSymsFromApk") {
     delete(file("${layout.buildDirectory}/intermediates/merged_assets/release/out/dump_syms"))
     delete(file("${layout.buildDirectory}/intermediates/merged_assets/debug/out/dump_syms"))
